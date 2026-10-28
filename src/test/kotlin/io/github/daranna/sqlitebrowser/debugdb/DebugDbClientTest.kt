@@ -227,6 +227,58 @@ class DebugDbClientTest {
     }
 
     @Test
+    fun `withDatabase lists databases before reopening one`() {
+        server.responses["getDbList"] = TWO_DATABASES
+        server.responses["getTableList"] = """{"rows":["article"],"isSuccessful":true}"""
+        server.responses["query"] = ARTICLE_PAGE
+
+        client.withDatabase("shop.db") { tablePage("article", 0, 50) }
+
+        assertEquals(
+            listOf("getDbList", "getTableList?database=shop.db", "query"),
+            server.requests.map { it.substringBefore("?query=") },
+        )
+    }
+
+    @Test
+    fun `withDatabase does not reopen the database that is already open`() {
+        server.responses["getTableList"] = """{"rows":["article"],"isSuccessful":true}"""
+        server.responses["query"] = ARTICLE_PAGE
+        client.tables("shop.db")
+        server.requests.clear()
+
+        client.withDatabase("shop.db") { tablePage("article", 0, 50) }
+
+        assertEquals(1, server.requests.size)
+        assertTrue(server.requests.single().startsWith("query?"))
+    }
+
+    @Test
+    fun `withDatabase switches to another database`() {
+        server.responses["getDbList"] = TWO_DATABASES
+        server.responses["getTableList"] = """{"rows":["article"],"isSuccessful":true}"""
+        server.responses["query"] = ARTICLE_PAGE
+        client.tables("shop.db")
+        server.requests.clear()
+
+        client.withDatabase("settings.db") { tablePage("pref", 0, 50) }
+
+        assertEquals("getTableList?database=settings.db", server.requests[1])
+    }
+
+    @Test(expected = DebugDbException::class)
+    fun `withDatabase never opens a database the server does not list`() {
+        server.responses["getDbList"] = TWO_DATABASES
+
+        try {
+            client.withDatabase("gone.db") { tablePage("article", 0, 50) }
+        } finally {
+            // getTableList with an unknown name would kill debug-db's server thread.
+            assertEquals(listOf("getDbList"), server.requests)
+        }
+    }
+
+    @Test
     fun `updateRow encodes its JSON twice so debug-db can decode it twice`() {
         server.responses["updateTableData"] = """{"isSuccessful":true}"""
         val row = listOf(
@@ -254,6 +306,9 @@ class DebugDbClientTest {
     }
 
     private companion object {
+        val TWO_DATABASES =
+            """{"rows":[["shop.db","false","true"],["settings.db","false","true"]],"isSuccessful":true}"""
+
         val ARTICLE_PAGE =
             """{"tableInfos":[{"title":"article_id","isPrimary":true},{"title":"name","isPrimary":false},
                |{"title":"price","isPrimary":false},{"title":"note","isPrimary":false}],

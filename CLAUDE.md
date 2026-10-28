@@ -25,7 +25,8 @@ Android Studio plugin (Kotlin, IntelliJ Platform Gradle Plugin 2.x) that shows a
 - **Call `databases()` before `tables()`, and pass only names it returned.** Anything else kills debug-db's server thread until the app restarts. The port then accepts connections but never answers.
 - **One debug-db app per port.** If another debug app on the device holds 8080, run the sample app and check on another port: `./gradlew -p sample-app installDebug -PdebugDbPort=8081` and `DEBUG_DB_PORT=8081 scripts/e2e-check.sh`. The script stops and names the app if the port belongs to someone else. Never send requests to a port that belongs to another app.
 - **Edit endpoints need their JSON encoded twice**; `query` needs it once; `database` and `tableName` are never decoded.
-- **Threads.** Swing only on the EDT; adb and HTTP on a pooled thread. Follow `background { }` and `ui { }` in `SqliteBrowserPanel`.
+- **Threads.** Swing only on the EDT; adb and HTTP on a pooled thread. Follow `background { }` and `ui { }` in `ui/Threads.kt`.
+- **Tabs share one client and one server.** A tab's loads go through `client.withDatabase(db) { ... }`, which reopens its database when another tab switched it.
 - **Test data comes from `sample-app/`**, never from a real app's database. The repo is public.
 
 ## Code

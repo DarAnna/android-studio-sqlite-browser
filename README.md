@@ -58,7 +58,10 @@ To install the plugin in your normal Studio instead: `./gradlew buildPlugin`, th
 |---|---|
 | `src/main/resources/META-INF/plugin.xml` | Tells the IDE what the plugin adds. Here: one tool window. |
 | `ui/SqliteBrowserToolWindowFactory.kt` | The IDE calls this the first time the tool window opens. |
-| `ui/SqliteBrowserPanel.kt` | The Swing panel: device, port, database and table pickers, the table. |
+| `ui/SqliteBrowserPanel.kt` | The Swing panel: the connection bar, the database tree and a tab per opened table. |
+| `ui/DatabaseTree.kt` | Databases and their tables; tables load when a database is expanded. |
+| `ui/TableView.kt` | One table in a tab: paging, sorting, a filter per column. |
+| `ui/Threads.kt` | `background()` and `ui()`: run slow work off the EDT and come back to it. |
 | `ui/TableDataModel.kt` | Feeds rows to the `JBTable`. Editing will go here. |
 | `debugdb/DebugDbClient.kt` | Calls debug-db's HTTP endpoints and parses the JSON. |
 | `adb/Adb.kt` | Finds and runs the `adb` binary: list devices, `adb forward`. |
@@ -67,7 +70,7 @@ To install the plugin in your normal Studio instead: `./gradlew buildPlugin`, th
 
 - **plugin.xml is the entry point.** The IDE reads it at startup and creates your classes only when needed. Nothing runs unless plugin.xml points at it.
 - **The UI is Swing.** IntelliJ adds its own versions of the usual parts (`JBTable`, `JBLabel`, `ComboBox`); use them so the plugin follows the IDE theme.
-- **Two kinds of thread.** Touch Swing parts only on the UI thread (the *EDT*). Do slow work, like adb and HTTP, on a background thread. `SqliteBrowserPanel.background()` and `ui()` show the pattern. If you block the EDT, the whole IDE freezes.
+- **Two kinds of thread.** Touch Swing parts only on the UI thread (the *EDT*). Do slow work, like adb and HTTP, on a background thread. `background()` and `ui()` in `ui/Threads.kt` show the pattern. If you block the EDT, the whole IDE freezes.
 - **Disposables.** Things that must be cleaned up register with a parent `Disposable`; the IDE disposes them when the tool window or project closes.
 - **Debugging.** Run the `runIde` task in debug mode from IntelliJ IDEA (or Android Studio) and breakpoints in the plugin work in the sandbox.
 

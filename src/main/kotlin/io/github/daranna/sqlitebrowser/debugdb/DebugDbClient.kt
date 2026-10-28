@@ -36,6 +36,9 @@ class DebugDbClient(private val port: Int) {
 
     data class TableData(val columns: List<Column>, val rows: List<List<Cell>>, val editable: Boolean)
 
+    /** The database the server has open, as far as this client knows: the last one passed to [tables]. */
+    private var openDatabase: String? = null
+
     /** Databases plus debug-db's "APP_SHARED_PREFERENCES" pseudo-database. */
     @Synchronized
     fun databases(): List<Database> {
@@ -54,9 +57,29 @@ class DebugDbClient(private val port: Int) {
      * Only pass a name [databases] returned: any other name kills debug-db's server thread until the app restarts.
      */
     @Synchronized
-    fun tables(database: String): List<String> = get("getTableList?database=$database").getAsJsonArray("rows")
-        .map { it.asString }
-        .filterNot { it == "android_metadata" }
+    fun tables(database: String): List<String> {
+        val tables = get("getTableList?database=$database").getAsJsonArray("rows")
+            .map { it.asString }
+            .filterNot { it == "android_metadata" }
+        openDatabase = database
+        return tables
+    }
+
+    /**
+     * Runs [block] with [database] open on the server, holding the client's lock so no other caller
+     * switches databases halfway through, e.g. between a page and its row count.
+     *
+     * Reopening asks [databases] first: after an app restart the server has forgotten the list, and
+     * [tables] before [databases] would kill it.
+     */
+    @Synchronized
+    fun <T> withDatabase(database: String, block: DebugDbClient.() -> T): T {
+        if (openDatabase != database) {
+            if (databases().none { it.name == database }) throw DebugDbException("The app no longer has database $database")
+            tables(database)
+        }
+        return block()
+    }
 
     /**
      * One page of [table] in the database last opened with [tables].
