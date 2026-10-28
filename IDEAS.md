@@ -6,12 +6,14 @@ Unscheduled feature ideas. Nothing here is committed to.
 
 In this order:
 
-1. Multiple tabs, together with cleaning up the connect panel (shrink it to the app name and a reconnect button once connected). Tabs on different databases must reopen their database first, since the server keeps state.
-2. Remember device, port, database and open tabs across IDE restarts.
-3. Editing in the table view. The client already has `updateRow`, `addRow` and `deleteRow`.
-4. Query window for own queries, as a tab type. Page with `SELECT * FROM (<sql>) LIMIT … OFFSET …`, and warn when the user's SQL breaks the table name rule.
+1. Remember device, port and open tabs (database and table each) across IDE restarts, with IntelliJ's `PersistentStateComponent`. On start, reconnect only if the same app still answers on the saved port, and reopen only databases it still lists.
+2. Editing in the table view. The client already has `updateRow`, `addRow` and `deleteRow`.
+3. Query window for own queries, as another kind of tab next to `TableView`. Page with `SELECT * FROM (<sql>) LIMIT … OFFSET …`, and warn when the user's SQL breaks the table name rule.
 
 Later: editing in query results. A free-form result has no single table or primary keys, so this probably only works for a plain `SELECT * FROM t …`.
+
+Done:
+- Tabs, a database tree and a compact connection bar ([#2](https://github.com/DarAnna/android-studio-sqlite-browser/pull/2)). Tabs load through `DebugDbClient.withDatabase`, which reopens their database when another tab switched it.
 
 Settled: SharedPreferences don't show up in apps that use DataStore instead, because debug-db only lists `shared_prefs/` XML files.
 
@@ -33,5 +35,5 @@ When a column is a foreign key, show a button in the cell that opens all rows of
 Things to settle:
 - Detecting foreign keys: `PRAGMA foreign_key_list(table)` through `query`, once per table when it loads. Check that debug-db's `query` endpoint passes PRAGMA through.
 - Which rows to show: the single referenced row, or every row in the other table that matches the value. The latter is what was asked for; both could be offered.
-- Navigation: open in the same table view with a filter and a way back, or in a new tab. The existing `ColumnFilter` work may already cover the filter part.
+- Navigation: open in the same table view with a filter and a way back, or in a new tab. Tabs exist now (`openTable` in `SqliteBrowserPanel`), so a new tab with the filter already set is the cheaper option. The existing `ColumnFilter` work may already cover the filter part.
 - The `WHERE` clause must respect the table name rule: the referenced table's name must appear only once in the SQL.
