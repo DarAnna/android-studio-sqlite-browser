@@ -4,12 +4,16 @@ Unscheduled feature ideas. Nothing here is committed to.
 
 ## Next steps (before the two ideas below)
 
-- Multiple tabs.
-- Query window for own queries.
-- Editing in query result views and in the table view.
-- Clean up the UX of the utility view (the db connect panel); maybe hide it.
-- Cache opened databases.
-- Find out why SharedPreferences doesn't show up in the speedy app.
+In this order:
+
+1. Multiple tabs, together with cleaning up the connect panel (shrink it to the app name and a reconnect button once connected). Tabs on different databases must reopen their database first, since the server keeps state.
+2. Remember device, port, database and open tabs across IDE restarts.
+3. Editing in the table view. The client already has `updateRow`, `addRow` and `deleteRow`.
+4. Query window for own queries, as a tab type. Page with `SELECT * FROM (<sql>) LIMIT … OFFSET …`, and warn when the user's SQL breaks the table name rule.
+
+Later: editing in query results. A free-form result has no single table or primary keys, so this probably only works for a plain `SELECT * FROM t …`.
+
+Settled: SharedPreferences don't show up in apps that use DataStore instead, because debug-db only lists `shared_prefs/` XML files.
 
 ## 1. Free text to query (AI)
 
