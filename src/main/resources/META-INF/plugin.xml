@@ -1,0 +1,18 @@
+<idea-plugin>
+    <id>io.github.daranna.sqlitebrowser</id>
+    <name>SQLite Browser</name>
+    <vendor url="https://github.com/DarAnna/android-studio-sqlite-browser">Anna Darii</vendor>
+    <description><![CDATA[
+        <p>Browse and edit the SQLite databases of a running Android debug app, live.</p>
+        <p>Talks to the <a href="https://github.com/amitshekhariitbhu/Android-Debug-Database">Android-Debug-Database</a>
+        server inside the app through <code>adb forward</code>.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="SQLite Browser"
+                    anchor="bottom"
+                    factoryClass="io.github.daranna.sqlitebrowser.ui.SqliteBrowserToolWindowFactory"/>
+    </extensions>
+</idea-plugin>
