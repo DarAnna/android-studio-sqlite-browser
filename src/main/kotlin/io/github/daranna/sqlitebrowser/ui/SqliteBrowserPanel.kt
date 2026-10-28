@@ -30,16 +30,19 @@ import javax.swing.Timer
  * A connection bar on top: device and port until connected, then just the app's name.
  * Below it, the app's databases and tables on the left, and a tab per opened table on the right.
  *
+ * The connection and tabs are kept in [saved]. When the saved device shows up, the panel reconnects
+ * if the saved app still answers on the saved port, and reopens the tabs the app still has.
+ *
  * All adb and HTTP calls run on a pooled thread; Swing components are only touched on the EDT.
  */
-class SqliteBrowserPanel(parent: Disposable) :
+class SqliteBrowserPanel(parent: Disposable, private val saved: SavedSession.Session) :
     JPanel(BorderLayout()),
     Disposable {
 
     private data class Connection(val serial: String, val port: Int, val owner: String)
 
     private val deviceBox = ComboBox<Adb.Device>()
-    private val portField = JBTextField("8080", 5)
+    private val portField = JBTextField(saved.port.toString(), 5)
     private val connectButton = JButton("Connect")
     private val cancelLink = ActionLink("Cancel") { showCard(CONNECTED) }
 
@@ -61,6 +64,9 @@ class SqliteBrowserPanel(parent: Disposable) :
 
     private var client: DebugDbClient? = null
     private var connection: Connection? = null
+
+    /** Whether to reconnect to the saved app once its device is listed. Only tried once. */
+    private var restorePending = saved.app != null
 
     /** While no device is listed, looks again: the emulator may have started after this panel opened. */
     private val devicePoll = Timer(DEVICE_POLL_MS) { if (deviceBox.itemCount == 0) pollDevices() }
@@ -110,6 +116,7 @@ class SqliteBrowserPanel(parent: Disposable) :
                 if (index >= 0) closeTab(tabs.getComponentAt(index) as TableView)
             }
         })
+        tabs.addChangeListener { saveTabs() }
         showCard(SETUP)
 
         loadDevices()
@@ -132,6 +139,7 @@ class SqliteBrowserPanel(parent: Disposable) :
                 if (deviceBox.itemCount == 0) {
                     showDevices(devices)
                     status.text = "Pick a device and press Connect."
+                    restore()
                 }
             }
         }
@@ -142,7 +150,17 @@ class SqliteBrowserPanel(parent: Disposable) :
         ui {
             showDevices(devices)
             status.text = if (devices.isEmpty()) "No device. Start an emulator or plug in a phone." else "Pick a device and press Connect."
+            restore()
         }
+    }
+
+    /** Reconnects to the saved app if its device is listed now. */
+    private fun restore() {
+        if (!restorePending) return
+        val device = (0 until deviceBox.itemCount).map(deviceBox::getItemAt).firstOrNull { it.serial == saved.serial } ?: return
+        restorePending = false
+        deviceBox.item = device
+        connect(quiet = true)
     }
 
     /** Keeps the selected device if it is still there. */
@@ -156,23 +174,41 @@ class SqliteBrowserPanel(parent: Disposable) :
     /**
      * Connects to the app on the chosen device and port. Tabs stay open when it is the same app,
      * with the new client, since a restarted app's server has forgotten which database was open.
+     *
+     * The first connection to the saved app reopens its saved tabs. With [quiet], connects only to the
+     * saved app, and sends it nothing if another app holds the port.
      */
-    private fun connect() {
+    private fun connect(quiet: Boolean = false) {
         val device = deviceBox.item ?: return loadDevices()
         val port = portField.text.trim().toIntOrNull() ?: return run { status.text = "Port must be a number" }
+        val savedApp = saved.app
+        val savedTabs = if (connection == null && views().isEmpty()) saved.tabs.toList() else emptyList()
+        val savedSelection = saved.selectedTab
         background(status, "Connecting to ${device.serial}:$port") {
             val owner = Adb.portOwner(device.serial, port)
-                ?: error("No app on ${device.serial} listens on port $port. Is the debug app running, with debug-db?")
+            if (quiet && owner != savedApp) {
+                return@background ui { status.text = "$savedApp is not running on ${device.serial}:$port. Start it and press Connect." }
+            }
+            owner ?: error("No app on ${device.serial} listens on port $port. Is the debug app running, with debug-db?")
             Adb.forward(device.serial, port)
             val newClient = DebugDbClient(port)
             val databases = newClient.databases()
+            val names = databases.map { it.name }
+            val reopen = if (owner == savedApp) SavedSession.reopenable(savedTabs, names, newClient::tables) else emptyList()
             ui {
                 val newConnection = Connection(device.serial, port, owner)
                 val sameApp = newConnection == connection
                 client = newClient
                 connection = newConnection
+                saved.serial = device.serial
+                saved.port = port
+                saved.app = owner
                 tree.show(newClient, databases)
                 if (sameApp) views().forEach { it.client = newClient } else views().forEach(::closeTab)
+                reopen.forEach { openTable(it.database, it.table) }
+                views().firstOrNull { SavedSession.Tab(it.database, it.tableName) == savedSelection }?.let(tabs::setSelectedComponent)
+                // Drops another app's saved tabs when nothing is open, which no tab change would.
+                saveTabs()
                 appLabel.text = "App: $owner"
                 whereLabel.text = "${device.serial}:$port"
                 appLabel.toolTipText = "Not the app you meant? Another debug-db app holds port $port; give each app its own port."
@@ -204,6 +240,11 @@ class SqliteBrowserPanel(parent: Disposable) :
     private fun closeTab(view: TableView) {
         tabs.remove(view)
         Disposer.dispose(view)
+    }
+
+    private fun saveTabs() {
+        saved.tabs = views().map { SavedSession.Tab(it.database, it.tableName) }.toMutableList()
+        saved.selectedTab = (tabs.selectedComponent as? TableView)?.let { SavedSession.Tab(it.database, it.tableName) }
     }
 
     private fun views(): List<TableView> = (0 until tabs.tabCount).map { tabs.getComponentAt(it) as TableView }

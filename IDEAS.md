@@ -6,14 +6,14 @@ Unscheduled feature ideas. Nothing here is committed to.
 
 In this order:
 
-1. Remember device, port and open tabs (database and table each) across IDE restarts, with IntelliJ's `PersistentStateComponent`. On start, reconnect only if the same app still answers on the saved port, and reopen only databases it still lists.
-2. Editing in the table view. The client already has `updateRow`, `addRow` and `deleteRow`.
-3. Query window for own queries, as another kind of tab next to `TableView`. Page with `SELECT * FROM (<sql>) LIMIT … OFFSET …`, and warn when the user's SQL breaks the table name rule.
+1. Editing in the table view. The client already has `updateRow`, `addRow` and `deleteRow`.
+2. Query window for own queries, as another kind of tab next to `TableView`. Page with `SELECT * FROM (<sql>) LIMIT … OFFSET …`, and warn when the user's SQL breaks the table name rule.
 
 Later: editing in query results. A free-form result has no single table or primary keys, so this probably only works for a plain `SELECT * FROM t …`.
 
 Done:
 - Tabs, a database tree and a compact connection bar ([#2](https://github.com/DarAnna/android-studio-sqlite-browser/pull/2)). Tabs load through `DebugDbClient.withDatabase`, which reopens their database when another tab switched it.
+- Device, port and open tabs kept across IDE restarts (`SavedSession`, in the workspace file). On start the panel reconnects only if the same app answers on the saved port, and reopens only tabs whose database and table the app still has.
 
 Settled: SharedPreferences don't show up in apps that use DataStore instead, because debug-db only lists `shared_prefs/` XML files.
 
@@ -37,3 +37,16 @@ Things to settle:
 - Which rows to show: the single referenced row, or every row in the other table that matches the value. The latter is what was asked for; both could be offered.
 - Navigation: open in the same table view with a filter and a way back, or in a new tab. Tabs exist now (`openTable` in `SqliteBrowserPanel`), so a new tab with the filter already set is the cheaper option. The existing `ColumnFilter` work may already cover the filter part.
 - The `WHERE` clause must respect the table name rule: the referenced table's name must appear only once in the SQL.
+
+## 3. App Inspection instead of debug-db
+
+Once the plugin works well on debug-db, try building it on Android Studio's App Inspection, the framework behind the Database Inspector. Then apps would need no extra library and no setup, and the plugin would see live data on the app's own connection, Room and WAL included.
+
+It looks possible. Studio 2026.1's Android plugin has an extension point, `com.android.tools.idea.appinspection.inspector.ide.appInspectorTabProvider`, which Google's own inspectors use. A plugin can register there too with `<depends>org.jetbrains.android</depends>`. For the device side, either reuse Google's SQLite agent (Apache 2.0, shipped in Studio as `app-inspection/sqlite-inspection.jar`) or write one with `androidx.inspection`.
+
+The risks:
+- **No stable API.** These are internal classes, so Studio updates may break the plugin.
+- **Few docs.** The only reference is the AOSP source: `tools/adt/idea/app-inspection` and `frameworks/support/sqlite/sqlite-inspection`.
+- **A possible clash.** Reusing Google's agent may clash with the Database Inspector, since each inspector ID attaches to an app only once.
+
+Plan: keep debug-db as the base, and build a small prototype on a branch to measure both problems first.
