@@ -7,6 +7,7 @@ import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.net.http.HttpTimeoutException
 import java.time.Duration
 
 /**
@@ -35,16 +36,24 @@ class DebugDbClient(private val port: Int) {
     /** Databases plus debug-db's "APP_SHARED_PREFERENCES" pseudo-database. */
     @Synchronized
     fun databases(): List<Database> {
-        val json = get("getDbList")
+        // Short timeout: this is the first call after connecting, and a debug-db server whose thread
+        // died still accepts connections but never answers.
+        val json = get("getDbList", Duration.ofSeconds(5))
         return json.getAsJsonArray("rows").map { row ->
             val fields = row.asJsonArray
             Database(fields[0].asString, fields[1].asString == "true")
-        }
+        }.filterNot { db -> SQLITE_SIDE_FILES.any { db.name.endsWith(it) } }
     }
 
-    /** Opens [database] on the server and returns its tables and views. */
+    /**
+     * Opens [database] on the server and returns its tables and views.
+     *
+     * Only pass a name [databases] returned: any other name kills debug-db's server thread until the app restarts.
+     */
     @Synchronized
-    fun tables(database: String): List<String> = get("getTableList?database=$database").getAsJsonArray("rows").map { it.asString }
+    fun tables(database: String): List<String> = get("getTableList?database=$database").getAsJsonArray("rows")
+        .map { it.asString }
+        .filterNot { it == "android_metadata" }
 
     /**
      * One page of [table] in the database last opened with [tables].
@@ -116,12 +125,18 @@ class DebugDbClient(private val port: Int) {
         return TableData(columns, rows, json.get("isEditable")?.asBoolean == true)
     }
 
-    private fun get(path: String): JsonObject {
+    private fun get(path: String, timeout: Duration = Duration.ofSeconds(30)): JsonObject {
         val request = HttpRequest.newBuilder(URI.create("http://localhost:$port/$path"))
-            .timeout(Duration.ofSeconds(30))
+            .timeout(timeout)
             .GET()
             .build()
-        val response = http.send(request, HttpResponse.BodyHandlers.ofString())
+        val response = try {
+            http.send(request, HttpResponse.BodyHandlers.ofString())
+        } catch (e: HttpTimeoutException) {
+            throw DebugDbException(
+                "No answer on port $port within ${timeout.seconds}s. The app's debug-db server may be stuck; restart the app.",
+            )
+        }
         if (response.statusCode() != 200) throw DebugDbException("HTTP ${response.statusCode()} from $path")
         return gson.fromJson(response.body(), JsonObject::class.java)
     }
@@ -130,3 +145,6 @@ class DebugDbClient(private val port: Int) {
 }
 
 class DebugDbException(message: String) : Exception(message)
+
+/** SQLite's companion files, which debug-db lists as if they were databases. */
+private val SQLITE_SIDE_FILES = listOf("-journal", "-wal", "-shm")

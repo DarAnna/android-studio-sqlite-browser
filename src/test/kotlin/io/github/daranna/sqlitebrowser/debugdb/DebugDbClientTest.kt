@@ -39,6 +39,25 @@ class DebugDbClientTest {
     }
 
     @Test
+    fun `databases hides SQLite side files`() {
+        server.responses["getDbList"] =
+            """{"rows":[["shop.db-shm","false","true"],["shop.db","false","true"],["shop.db-wal","false","true"],
+               |["settings.db","false","true"],["settings.db-journal","false","true"]],
+               |"columns":[],"isSuccessful":true,"error":null,"dbVersion":0}
+            """.trimMargin()
+
+        assertEquals(listOf("shop.db", "settings.db"), client.databases().map { it.name })
+    }
+
+    @Test
+    fun `tables hides android_metadata`() {
+        server.responses["getTableList"] =
+            """{"rows":["android_metadata","article"],"columns":[],"isSuccessful":true,"error":null,"dbVersion":1}"""
+
+        assertEquals(listOf("article"), client.tables("shop.db"))
+    }
+
+    @Test
     fun `tables opens the database by name`() {
         server.responses["getTableList"] =
             """{"rows":["article","big_table"],"columns":[],"isSuccessful":true,"error":null,"dbVersion":3}"""

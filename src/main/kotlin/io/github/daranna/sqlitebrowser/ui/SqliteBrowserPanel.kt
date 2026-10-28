@@ -31,6 +31,9 @@ class SqliteBrowserPanel(parent: Disposable) :
     private val deviceBox = ComboBox<Adb.Device>()
     private val portField = JBTextField("8080", 5)
     private val connectButton = JButton("Connect")
+
+    /** The app that answers on the port, which may not be the one the user means. */
+    private val appLabel = JBLabel()
     private val databaseBox = ComboBox<String>()
     private val tableBox = ComboBox<String>()
     private val refreshButton = JButton("Refresh")
@@ -62,6 +65,7 @@ class SqliteBrowserPanel(parent: Disposable) :
             add(JBLabel("Port:"))
             add(portField)
             add(connectButton)
+            add(appLabel)
             add(JBLabel("Database:"))
             add(databaseBox)
             add(JBLabel("Table:"))
@@ -119,16 +123,22 @@ class SqliteBrowserPanel(parent: Disposable) :
     private fun connect() {
         val device = deviceBox.item ?: return loadDevices()
         val port = portField.text.trim().toIntOrNull() ?: return run { status.text = "Port must be a number" }
+        client = null
+        appLabel.text = ""
         background("Connecting to ${device.serial}:$port") {
+            val owner = Adb.portOwner(device.serial, port)
+                ?: error("No app on ${device.serial} listens on port $port. Is the debug app running, with debug-db?")
             Adb.forward(device.serial, port)
             val newClient = DebugDbClient(port)
             val databases = newClient.databases()
             client = newClient
             ui {
+                appLabel.text = "App: $owner"
                 setItems(databaseBox, databases.map { it.name }, select = false)
                 setItems(tableBox, emptyList())
                 clearTable()
-                status.text = "Connected. ${databases.size} databases."
+                status.text = "Connected to $owner. ${databases.size} databases. " +
+                    "Not the app you meant? Another debug-db app holds port $port; give each app its own port."
             }
         }
     }
