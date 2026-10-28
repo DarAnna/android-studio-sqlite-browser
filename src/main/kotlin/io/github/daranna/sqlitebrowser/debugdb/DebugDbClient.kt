@@ -138,18 +138,59 @@ class DebugDbClient(private val port: Int) {
     @Synchronized
     fun query(sql: String): TableData = parseTableData(get("query?query=" + encode(sql)))
 
-    /** Updates one row. [row] holds every column; primary key columns pick the row. */
+    /**
+     * Names of [table]'s primary key columns, in key order, from `PRAGMA table_info`.
+     *
+     * Edits need this rather than [Column.isPrimaryKey]: debug-db marks only the first column of a composite key,
+     * and its edit calls pick the row by the marked columns alone.
+     */
     @Synchronized
-    fun updateRow(table: String, row: List<RowValue>): Boolean = editCall("updateTableData", "updatedData", table, row)
+    fun primaryKey(table: String): List<String> = query("PRAGMA table_info($table)").rows
+        .map { (it[5].value as Number).toInt() to it[1].value as String }
+        .filter { (position, _) -> position > 0 }
+        .sortedBy { (position, _) -> position }
+        .map { (_, name) -> name }
 
+    /**
+     * Updates one row. Primary key columns pick the row; the other columns in [row] are set, the rest are left alone.
+     */
+    @Synchronized
+    fun updateRow(table: String, row: List<RowValue>): Boolean {
+        // debug-db would run the UPDATE without a WHERE and change every row.
+        if (row.none { it.isPrimary }) throw DebugDbException("No primary key to pick the row in $table")
+        return editCall("updateTableData", "updatedData", table, row)
+    }
+
+    /** Inserts a row with the columns in [row]; the others get their default. */
     @Synchronized
     fun addRow(table: String, row: List<RowValue>): Boolean = editCall("addTableData", "addData", table, row)
 
+    /** Deletes the row that the primary key columns in [row] pick. */
     @Synchronized
-    fun deleteRow(table: String, row: List<RowValue>): Boolean = editCall("deleteTableData", "deleteData", table, row)
+    fun deleteRow(table: String, row: List<RowValue>): Boolean {
+        // debug-db would report success without deleting anything.
+        if (row.none { it.isPrimary }) throw DebugDbException("No primary key to pick the row in $table")
+        return editCall("deleteTableData", "deleteData", table, row)
+    }
 
     /** One column of a row as debug-db's `RowDataRequest` wants it. `value` "null" means SQL NULL. */
-    data class RowValue(val title: String, val isPrimary: Boolean, val dataType: String, val value: String?)
+    data class RowValue(val title: String, val isPrimary: Boolean, val dataType: String, val value: String?) {
+        companion object {
+            /**
+             * [value] as read from a page (a Number or String) or typed by the user (a String), or null for NULL.
+             *
+             * Text goes as `text` even in numeric columns: SQLite's column affinity turns `'5'` into 5. NULL goes as
+             * `text` too, since debug-db parses `integer` and `real` values with `Long.valueOf` and `Double.valueOf`,
+             * which throw on it. So does the text "null", which debug-db can't tell from NULL.
+             */
+            fun of(column: String, isPrimary: Boolean, value: Any?): RowValue = when {
+                value == null -> RowValue(column, isPrimary, "text", "null")
+                value !is Number -> RowValue(column, isPrimary, "text", value.toString())
+                value.toString().toLongOrNull() != null -> RowValue(column, isPrimary, "integer", value.toString())
+                else -> RowValue(column, isPrimary, "real", value.toString())
+            }
+        }
+    }
 
     private fun editCall(endpoint: String, param: String, table: String, row: List<RowValue>): Boolean {
         val data = encode(encode(gson.toJson(row)))

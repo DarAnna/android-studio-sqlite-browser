@@ -18,9 +18,15 @@ This plugin does the same job as the Database Inspector, but better. It starts w
 - **Big tables are fine.** Rows load 500 at a time, so a table with hundreds of thousands of rows opens fast and doesn't run your app out of memory.
 - **Tabs.** All databases and their tables sit in a tree; double-click a table to open it in its own tab. Keep several tables from several databases open side by side.
 - **Picks up where you left off.** The plugin remembers the device, port and open tabs. Next time, it reconnects by itself if the same app is running.
+- **Edit the data.** Double-click a cell to change it, right-click it to set it to NULL. **Add Row** inserts a row; columns you leave empty get their default. Select rows and press Delete (or **Delete**) to remove them. Changes go straight into the app's database.
+  - Editing and deleting rows need a table with a single-column primary key, which picks the row. Other tables can only get new rows.
+  - The key itself can't be changed.
+  - Typing the text `null` stores NULL: debug-db can't tell them apart.
+  - NULL shows as a grey `NULL`, so it doesn't look like an empty string.
+  - Your app's screens don't update right away when they watch the data through Room (`Flow`, `LiveData`): they show the change the next time they read, e.g. when you reopen the screen. debug-db writes on its own connection, which Room doesn't notice. Android Studio's Database Inspector does tell Room.
 - **Refresh** a tab to see what your app wrote since.
 
-Coming next: editing cells, adding and deleting rows, and a query tab for your own SQL.
+Coming next: a query tab for your own SQL.
 
 ## Usage
 

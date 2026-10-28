@@ -210,6 +210,41 @@ check_article_filter() {
     [[ "$ok" == true && "$ids" == "1,10" && "$n" == 2 && "$eq" == 7 ]]
 }
 
+check_article_primary_key() {
+    # DebugDbClient.primaryKey: PRAGMA through query, with the key position in column 5.
+    local key
+    get "getTableList?database=shop.db" >/dev/null
+    key="$(query "PRAGMA table_info(article)" | jq -r '[.rows[] | select(.[5].value > 0) | .[1].value] | join(",")')"
+    echo "key=$key"
+    [[ "$key" == article_id ]]
+}
+
+# An edit call as DebugDbClient.editCall sends it: the JSON encoded twice.
+edit() {
+    get "$1?tableName=article&$2=$(uri_encode "$(uri_encode "$3")")" | jq -r '.isSuccessful'
+}
+
+check_article_edit() {
+    # What TableView sends: add with only the typed columns (the key left to SQLite), update with the key and the
+    # changed column, numbers and NULL as text, then delete by key.
+    local added id updated row deleted n
+    get "getTableList?database=shop.db" >/dev/null
+    added="$(edit addTableData addData '[{"title":"name","isPrimary":false,"dataType":"text","value":"e2e"}]')"
+    id="$(query "SELECT * FROM article ORDER BY 1 DESC LIMIT 1" | first_value)"
+    updated="$(edit updateTableData updatedData \
+        '[{"title":"article_id","isPrimary":true,"dataType":"integer","value":"'"$id"'"},
+          {"title":"price","isPrimary":false,"dataType":"text","value":"2.5"},
+          {"title":"note","isPrimary":false,"dataType":"text","value":"null"}]')"
+    row="$(query "SELECT * FROM article ORDER BY 1 DESC LIMIT 1" \
+        | jq -r '.rows[0] | map(.dataType + ":" + (.value | tostring)) | join(",")')"
+    deleted="$(edit deleteTableData deleteData \
+        '[{"title":"article_id","isPrimary":true,"dataType":"integer","value":"'"$id"'"}]')"
+    n="$(query "SELECT COUNT(*) FROM article" | first_value)"
+    echo "added=$added id=$id updated=$updated row=$row deleted=$deleted rows=$n"
+    [[ "$added" == true && "$id" == $((ARTICLE_ROWS + 1)) && "$updated" == true && "$deleted" == true \
+        && "$row" == "integer:$id,text:e2e,real:2.5,text:null" && "$n" == "$ARTICLE_ROWS" ]]
+}
+
 check_settings_db() {
     local n
     get "getTableList?database=settings.db" >/dev/null
@@ -232,6 +267,8 @@ check "big_table COUNT(*) matches seeded rows" check_big_table_count
 check "article sorted by column number" check_article_number_sort
 check "article sorted by name hits the table-name rewrite" check_article_name_sort_trap
 check "article filtered by column, as the plugin filters" check_article_filter
+check "article primary key from PRAGMA table_info" check_article_primary_key
+check "article row added, updated and deleted, as the plugin edits" check_article_edit
 check "settings.db flag table readable" check_settings_db
 check "app process still alive" check_app_alive
 

@@ -43,9 +43,10 @@ To try it, use [the sample app](sample-app), never a real app's database: the re
 | `ui/SqliteBrowserPanel.kt` | The Swing panel: the connection bar, the database tree and a tab per opened table. |
 | `ui/SavedSession.kt` | Device, port, app and open tabs, kept in the workspace file across IDE restarts. |
 | `ui/DatabaseTree.kt` | Databases and their tables; tables load when a database is expanded. |
-| `ui/TableView.kt` | One table in a tab: paging, sorting, a filter per column. |
+| `ui/TableView.kt` | One table in a tab: paging, sorting, a filter per column, editing. |
+| `ui/AddRowDialog.kt` | Asks for the values of a new row. |
 | `ui/Threads.kt` | `background()` and `ui()`: run slow work off the EDT and come back to it. |
-| `ui/TableDataModel.kt` | Feeds rows to the `JBTable`. Editing will go here. |
+| `ui/TableDataModel.kt` | Feeds rows to the `JBTable` and passes cell edits on to `TableView`. |
 | `debugdb/DebugDbClient.kt` | Calls debug-db's HTTP endpoints and parses the JSON. |
 | `debugdb/ColumnFilter.kt` | Turns what the user typed in a filter box into an SQL condition. |
 | `adb/Adb.kt` | Finds and runs the `adb` binary: list devices, `adb forward`. |
@@ -73,7 +74,11 @@ From reading debug-db 1.0.7's `RequestHandler.java`. The client handles these; t
 - **One request at a time.** The server serves sockets one by one, so `DebugDbClient` makes its methods `synchronized`.
 - **Names are not decoded.** `database` and `tableName` are cut from the URL after the first `=`. Names with spaces or `&` break.
 - **Edit calls are decoded twice.** `updateTableData`, `addTableData` and `deleteTableData` decode the whole URL, then parse it, so their JSON must be encoded twice.
-- **Edits send every column.** Each row is a list of `{title, isPrimary, dataType, value}`. Primary key columns build the `WHERE`; the string `"null"` means SQL NULL.
+- **Edit calls take a list of `{title, isPrimary, dataType, value}`.** Primary key columns build the `WHERE`; the other columns go into the `UPDATE` or `INSERT`, so the plugin sends only the key and the changed column, or only the columns the user filled in. The string `"null"` means SQL NULL.
+- **An update without a primary key column changes every row**, since the `WHERE` stays empty. A delete without one reports success and deletes nothing. `DebugDbClient` refuses both.
+- **`isPrimary` marks only the first column of a composite key** (`pk == 1` in `PRAGMA table_info`), so an edit would pick rows by that column alone. The plugin reads the key with `PRAGMA table_info` through `query` and edits rows only when the key is one column.
+- **`integer` and `real` values are parsed with `Long.valueOf` and `Double.valueOf`**, which throw on NULL, and the edit then fails. So NULL and anything the user typed go as `text`; SQLite's column affinity turns `'5'` into 5 in numeric columns. A `dataType` other than `integer`, `real` or `text` is skipped by updates.
+- **An add with no columns fails**: debug-db inserts without a "null column hack".
 - **BLOBs come back as text**, and every value is typed by SQLite's storage class, not the column's declared type.
 - **`isEditable`** is true only for a plain table (not a view) whose columns all came back.
 - **`getAllDataFromTheTable` crashes the app on large tables.** It builds the whole table as one JSON string in the app's memory, and the app dies with `OutOfMemoryError`. So the plugin never calls it. It pages with `SELECT * FROM t LIMIT … OFFSET …` through `query`, which returns the same JSON, primary keys and `isEditable` included.
