@@ -17,6 +17,10 @@ long that took:
 
 Seeding takes a few seconds on an emulator. Later launches skip it.
 
+Then the screen lists `article` and `flag`. It reads them again on **Refresh** and whenever the app
+comes to the front, so you can see edits made through the plugin. Nothing watches the tables: like
+an app using Room, it shows a change only when it reads again.
+
 ## Build, install, run
 
 It is a separate Gradle build; use the root wrapper. Run from the repository root:

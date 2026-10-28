@@ -4,16 +4,14 @@ Unscheduled feature ideas. Nothing here is committed to.
 
 ## Next steps (before the two ideas below)
 
-In this order:
-
-1. Editing in the table view. The client already has `updateRow`, `addRow` and `deleteRow`.
-2. Query window for own queries, as another kind of tab next to `TableView`. Page with `SELECT * FROM (<sql>) LIMIT … OFFSET …`, and warn when the user's SQL breaks the table name rule.
+1. Query window for own queries, as another kind of tab next to `TableView`. Page with `SELECT * FROM (<sql>) LIMIT … OFFSET …`, and warn when the user's SQL breaks the table name rule.
 
 Later: editing in query results. A free-form result has no single table or primary keys, so this probably only works for a plain `SELECT * FROM t …`.
 
 Done:
 - Tabs, a database tree and a compact connection bar ([#2](https://github.com/DarAnna/android-studio-sqlite-browser/pull/2)). Tabs load through `DebugDbClient.withDatabase`, which reopens their database when another tab switched it.
 - Device, port and open tabs kept across IDE restarts (`SavedSession`, in the workspace file). On start the panel reconnects only if the same app answers on the saved port, and reopens only tabs whose database and table the app still has.
+- Editing in the table view: edit a cell, set it to NULL, add a row, delete rows. Only tables with a single-column primary key can have rows edited or deleted, since debug-db picks the row by the first key column alone; the key comes from `PRAGMA table_info`.
 
 Settled: SharedPreferences don't show up in apps that use DataStore instead, because debug-db only lists `shared_prefs/` XML files.
 
@@ -41,6 +39,8 @@ Things to settle:
 ## 3. App Inspection instead of debug-db
 
 Once the plugin works well on debug-db, try building it on Android Studio's App Inspection, the framework behind the Database Inspector. Then apps would need no extra library and no setup, and the plugin would see live data on the app's own connection, Room and WAL included.
+
+It would also fix a limit of editing through debug-db: the app's screens don't show the edit until they read again. Room learns about changes from temporary triggers, which fire only for writes on Room's own connection, and debug-db writes on a separate one. The Database Inspector's agent tells Room's `InvalidationTracker` to recheck after each change, so its edits show up right away.
 
 It looks possible. Studio 2026.1's Android plugin has an extension point, `com.android.tools.idea.appinspection.inspector.ide.appInspectorTabProvider`, which Google's own inspectors use. A plugin can register there too with `<depends>org.jetbrains.android</depends>`. For the device side, either reuse Google's SQLite agent (Apache 2.0, shipped in Studio as `app-inspection/sqlite-inspection.jar`) or write one with `androidx.inspection`.
 

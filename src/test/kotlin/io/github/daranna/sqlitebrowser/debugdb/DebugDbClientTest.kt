@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.net.URI
 import java.net.URLDecoder
@@ -303,6 +304,49 @@ class DebugDbClientTest {
         server.responses["deleteTableData"] = """{"isSuccessful":false}"""
 
         assertFalse(client.deleteRow("article", listOf(DebugDbClient.RowValue("article_id", true, "integer", "1"))))
+    }
+
+    @Test
+    fun `primaryKey reads every key column from PRAGMA table_info, in key order`() {
+        // A composite key declared as PRIMARY KEY (b, a): debug-db's own isPrimary would mark only b.
+        server.responses["query"] =
+            """{"isSuccessful":true,"isEditable":false,"tableInfos":[],"rows":[
+               |[{"dataType":"integer","value":0},{"dataType":"text","value":"a"},{"dataType":"text","value":"INTEGER"},
+               |{"dataType":"integer","value":0},{"dataType":"text","value":null},{"dataType":"integer","value":2}],
+               |[{"dataType":"integer","value":1},{"dataType":"text","value":"b"},{"dataType":"text","value":"TEXT"},
+               |{"dataType":"integer","value":0},{"dataType":"text","value":null},{"dataType":"integer","value":1}],
+               |[{"dataType":"integer","value":2},{"dataType":"text","value":"c"},{"dataType":"text","value":"TEXT"},
+               |{"dataType":"integer","value":0},{"dataType":"text","value":null},{"dataType":"integer","value":0}]]}
+            """.trimMargin()
+
+        assertEquals(listOf("b", "a"), client.primaryKey("pair"))
+        assertEquals("PRAGMA table_info(pair)", server.lastQuerySql())
+    }
+
+    @Test
+    fun `updateRow and deleteRow refuse a row without a primary key, which would hit every row`() {
+        val row = listOf(DebugDbClient.RowValue("name", false, "text", "x"))
+
+        for (call in listOf<() -> Unit>({ client.updateRow("article", row) }, { client.deleteRow("article", row) })) {
+            try {
+                call()
+                fail("expected DebugDbException")
+            } catch (_: DebugDbException) {
+            }
+        }
+        assertTrue(server.requests.isEmpty())
+    }
+
+    @Test
+    fun `RowValue of sends numbers by kind and NULL and text as text`() {
+        server.responses["query"] = ARTICLE_PAGE
+        val (id, _, price, note) = client.tablePage("article", 0, 50).rows[0].map { it.value }
+
+        assertEquals(DebugDbClient.RowValue("article_id", true, "integer", "1"), DebugDbClient.RowValue.of("article_id", true, id))
+        assertEquals(DebugDbClient.RowValue("price", false, "real", "0.5"), DebugDbClient.RowValue.of("price", false, price))
+        // debug-db parses integer and real with Long.valueOf / Double.valueOf, which throw on NULL.
+        assertEquals(DebugDbClient.RowValue("note", false, "text", "null"), DebugDbClient.RowValue.of("note", false, note))
+        assertEquals(DebugDbClient.RowValue("price", false, "text", "7"), DebugDbClient.RowValue.of("price", false, "7"))
     }
 
     private companion object {
