@@ -36,6 +36,13 @@ dependencies {
 }
 
 intellijPlatform {
+    // Unpack downloaded IDEs into .intellijPlatform/ides/ instead of Gradle's transforms cache. CI's setup-gradle
+    // saves and restores that cache, and a restored Android Studio came back without its core plugin.
+    caching {
+        ides {
+            enabled = true
+        }
+    }
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "261"
