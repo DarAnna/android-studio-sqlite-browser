@@ -1,0 +1,64 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plugin:
+    name: Plugin – test, lint, build, verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: corretto
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests
+        run: ./gradlew test
+
+      - name: Lint
+        run: ./gradlew ktlintCheck
+
+      - name: Build plugin
+        run: ./gradlew buildPlugin
+
+      # JetBrains' Plugin Verifier: flags platform APIs that are missing or deprecated in Android Studio.
+      - name: Verify plugin
+        run: ./gradlew verifyPlugin
+
+      - name: Upload plugin zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin
+          path: build/distributions/*.zip
+
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports
+          path: |
+            build/reports
+            build/test-results
+
+  sample-app:
+    name: Sample app – build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: corretto
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build sample app
+        run: ./gradlew -p sample-app assembleDebug

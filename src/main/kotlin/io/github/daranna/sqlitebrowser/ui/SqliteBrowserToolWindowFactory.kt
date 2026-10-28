@@ -6,7 +6,9 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
 
-class SqliteBrowserToolWindowFactory : ToolWindowFactory, DumbAware {
+class SqliteBrowserToolWindowFactory :
+    ToolWindowFactory,
+    DumbAware {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = SqliteBrowserPanel(toolWindow.disposable)

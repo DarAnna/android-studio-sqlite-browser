@@ -24,7 +24,9 @@ import javax.swing.JPanel
  *
  * All adb and HTTP calls run on a pooled thread; Swing components are only touched on the EDT.
  */
-class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposable {
+class SqliteBrowserPanel(parent: Disposable) :
+    JPanel(BorderLayout()),
+    Disposable {
 
     private val deviceBox = ComboBox<Adb.Device>()
     private val portField = JBTextField("8080", 5)
@@ -68,11 +70,14 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
         }
         val bottom = JPanel(BorderLayout()).apply {
             add(status, BorderLayout.CENTER)
-            add(JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
-                add(prevButton)
-                add(pageLabel)
-                add(nextButton)
-            }, BorderLayout.EAST)
+            add(
+                JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
+                    add(prevButton)
+                    add(pageLabel)
+                    add(nextButton)
+                },
+                BorderLayout.EAST,
+            )
         }
         status.border = JBUI.Borders.empty(2, 6)
 
@@ -84,8 +89,14 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
         databaseBox.addActionListener { if (!updatingCombos) loadTables() }
         tableBox.addActionListener { if (!updatingCombos) openTable() }
         refreshButton.addActionListener { loadPage() }
-        prevButton.addActionListener { offset = maxOf(0, offset - PAGE_SIZE); loadPage() }
-        nextButton.addActionListener { offset += PAGE_SIZE; loadPage() }
+        prevButton.addActionListener {
+            offset = maxOf(0, offset - PAGE_SIZE)
+            loadPage()
+        }
+        nextButton.addActionListener {
+            offset += PAGE_SIZE
+            loadPage()
+        }
         table.tableHeader.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 val column = table.columnAtPoint(e.point)
@@ -146,8 +157,13 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
     /** First click sorts ascending, second descending, third goes back to table order. */
     private fun sortBy(column: Int) {
         when {
-            model.sortColumn != column -> { model.sortColumn = column; model.sortDescending = false }
+            model.sortColumn != column -> {
+                model.sortColumn = column
+                model.sortDescending = false
+            }
+
             !model.sortDescending -> model.sortDescending = true
+
             else -> model.sortColumn = null
         }
         offset = 0
@@ -208,8 +224,7 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
         }
     }
 
-    private fun ui(block: () -> Unit) =
-        ApplicationManager.getApplication().invokeLater(block, ModalityState.any())
+    private fun ui(block: () -> Unit) = ApplicationManager.getApplication().invokeLater(block, ModalityState.any())
 
     override fun dispose() {
         client = null

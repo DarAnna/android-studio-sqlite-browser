@@ -27,6 +27,5 @@ class TableDataModel : AbstractTableModel() {
         return col.name + key + arrow
     }
 
-    override fun getValueAt(rowIndex: Int, columnIndex: Int): Any? =
-        data.rows[rowIndex].getOrNull(columnIndex)?.value
+    override fun getValueAt(rowIndex: Int, columnIndex: Int): Any? = data.rows[rowIndex].getOrNull(columnIndex)?.value
 }

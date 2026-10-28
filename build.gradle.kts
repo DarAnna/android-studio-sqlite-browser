@@ -1,6 +1,10 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.intellij.platform")
+    id("org.jlleitschuh.gradle.ktlint")
 }
 
 group = providers.gradleProperty("pluginGroup").get()
@@ -8,6 +12,11 @@ version = providers.gradleProperty("pluginVersion").get()
 
 kotlin {
     jvmToolchain(21)
+    compilerOptions {
+        // Call IntelliJ's interface default methods instead of copying them into our classes;
+        // the copies show up as deprecated and experimental API use in verifyPlugin.
+        jvmDefault.set(org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode.NO_COMPATIBILITY)
+    }
 }
 
 dependencies {
@@ -22,6 +31,7 @@ dependencies {
         } else {
             androidStudio(providers.gradleProperty("androidStudioVersion").get())
         }
+        testFramework(TestFrameworkType.Platform)
     }
 }
 
@@ -31,4 +41,13 @@ intellijPlatform {
             sinceBuild = "261"
         }
     }
+    pluginVerification {
+        ides {
+            create(IntelliJPlatformType.AndroidStudio, providers.gradleProperty("androidStudioVersion").get())
+        }
+    }
+}
+
+ktlint {
+    version = "1.8.0"
 }

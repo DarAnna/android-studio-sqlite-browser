@@ -30,11 +30,7 @@ class DebugDbClient(private val port: Int) {
 
     data class Cell(val dataType: String, val value: Any?)
 
-    data class TableData(
-        val columns: List<Column>,
-        val rows: List<List<Cell>>,
-        val editable: Boolean,
-    )
+    data class TableData(val columns: List<Column>, val rows: List<List<Cell>>, val editable: Boolean)
 
     /** Databases plus debug-db's "APP_SHARED_PREFERENCES" pseudo-database. */
     @Synchronized
@@ -48,8 +44,7 @@ class DebugDbClient(private val port: Int) {
 
     /** Opens [database] on the server and returns its tables and views. */
     @Synchronized
-    fun tables(database: String): List<String> =
-        get("getTableList?database=$database").getAsJsonArray("rows").map { it.asString }
+    fun tables(database: String): List<String> = get("getTableList?database=$database").getAsJsonArray("rows").map { it.asString }
 
     /**
      * One page of [table] in the database last opened with [tables].

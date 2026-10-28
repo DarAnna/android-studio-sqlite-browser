@@ -81,6 +81,9 @@ IntelliJ IDEA (free Community or Ultimate) has the best support for plugin work:
 
 From reading debug-db 1.0.7's `RequestHandler.java`. The client handles these; they matter when you change it.
 
+- **One bad `getTableList` stops the server for good.** If it runs before `getDbList` has run since the app started, or with a name `getDbList` didn't return, the server thread dies with a `NullPointerException`. The port stays open, so later requests connect but never get an answer. Only an app restart fixes it. Always call `getDbList` first and pass only names from it.
+- **Two debug-db apps on one device can't share a port.** The second app's server fails without an error, and `adb forward` reaches whichever app holds the port, so you may be looking at the wrong app's data. Give each app its own port through debug-db's `PORT_NUMBER` string resource. The sample app takes `-PdebugDbPort=8081`.
+- **`getDbList` also lists SQLite's side files** (`x.db-wal`, `x.db-shm`, `x.db-journal`), and `getTableList` includes Android's `android_metadata` table.
 - **The server keeps state.** `getTableList?database=x` opens database `x`. Every later table call, `query` included, works on that database. So always call `tables()` before `tableData()` for a different database.
 - **One request at a time.** The server serves sockets one by one, so `DebugDbClient` makes its methods `synchronized`.
 - **Names are not decoded.** `database` and `tableName` are cut from the URL after the first `=`. Names with spaces or `&` break.
@@ -99,6 +102,28 @@ From reading debug-db 1.0.7's `RequestHandler.java`. The client handles these; t
 3. Row insert and delete.
 4. SQL console tab.
 5. Auto-refresh toggle.
+
+### Later: App Inspection instead of debug-db
+
+Once the plugin works well on debug-db, try building it on Android Studio's App Inspection, the framework behind the Database Inspector. Then apps would need no extra library and no setup, and the plugin would see live data on the app's own connection, Room and WAL included.
+
+It looks possible. Studio 2026.1's Android plugin has an extension point, `com.android.tools.idea.appinspection.inspector.ide.appInspectorTabProvider`, which Google's own inspectors use. A plugin can register there too with `<depends>org.jetbrains.android</depends>`. For the device side, either reuse Google's SQLite agent (Apache 2.0, shipped in Studio as `app-inspection/sqlite-inspection.jar`) or write one with `androidx.inspection`.
+
+The risks:
+- **No stable API.** These are internal classes, so Studio updates may break the plugin.
+- **Few docs.** The only reference is the AOSP source: `tools/adt/idea/app-inspection` and `frameworks/support/sqlite/sqlite-inspection`.
+- **A possible clash.** Reusing Google's agent may clash with the Database Inspector, since each inspector ID attaches to an app only once.
+
+Plan: keep debug-db as the base, and build a small prototype on a branch to measure both problems first.
+
+## Development
+
+| What | Command |
+|---|---|
+| Unit tests (fake debug-db server, no device) | `./gradlew test` |
+| Lint | `./gradlew ktlintCheck` (fix with `./gradlew ktlintFormat`) |
+| End-to-end check against [the sample app](sample-app) on an emulator | `scripts/e2e-check.sh` |
+| Compatibility check with Android Studio | `./gradlew verifyPlugin` |
 
 ## Licence
 

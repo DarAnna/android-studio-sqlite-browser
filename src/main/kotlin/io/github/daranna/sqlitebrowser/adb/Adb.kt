@@ -25,15 +25,14 @@ object Adb {
             .firstOrNull { it.canExecute() }
     }
 
-    fun devices(): List<Device> =
-        run("devices", "-l").lines()
-            .drop(1)
-            .filter { it.isNotBlank() && " device " in "$it " }
-            .map { line ->
-                val serial = line.substringBefore(' ')
-                val model = Regex("model:(\\S+)").find(line)?.groupValues?.get(1)
-                Device(serial, if (model != null) "$model ($serial)" else serial)
-            }
+    fun devices(): List<Device> = run("devices", "-l").lines()
+        .drop(1)
+        .filter { it.isNotBlank() && " device " in "$it " }
+        .map { line ->
+            val serial = line.substringBefore(' ')
+            val model = Regex("model:(\\S+)").find(line)?.groupValues?.get(1)
+            Device(serial, if (model != null) "$model ($serial)" else serial)
+        }
 
     /** Forwards [port] on this machine to the same port on the device. */
     fun forward(serial: String, port: Int) {
