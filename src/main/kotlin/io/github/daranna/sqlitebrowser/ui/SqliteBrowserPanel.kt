@@ -14,11 +14,13 @@ import io.github.daranna.sqlitebrowser.adb.Adb
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 import java.awt.BorderLayout
 import java.awt.FlowLayout
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import javax.swing.JButton
 import javax.swing.JPanel
 
 /**
- * Device and port on top, then database and table pickers, then the rows.
+ * Device and port on top, then database and table pickers, then the rows, one page at a time.
  *
  * All adb and HTTP calls run on a pooled thread; Swing components are only touched on the EDT.
  */
@@ -30,11 +32,13 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
     private val databaseBox = ComboBox<String>()
     private val tableBox = ComboBox<String>()
     private val refreshButton = JButton("Refresh")
+    private val prevButton = JButton("◀")
+    private val nextButton = JButton("▶")
+    private val pageLabel = JBLabel()
     private val status = JBLabel()
 
     private val model = TableDataModel()
     private val table = JBTable(model).apply {
-        autoCreateRowSorter = true
         autoResizeMode = JBTable.AUTO_RESIZE_OFF
     }
 
@@ -42,6 +46,10 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
 
     /** Set while we fill the combo boxes ourselves, so their listeners don't fire requests. */
     private var updatingCombos = false
+
+    // Paging and sorting of the current table. Sorting happens in SQL, so it covers all rows, not just the page.
+    private var offset = 0
+    private var totalRows = 0L
 
     init {
         Disposer.register(parent, this)
@@ -58,16 +66,33 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
             add(tableBox)
             add(refreshButton)
         }
+        val bottom = JPanel(BorderLayout()).apply {
+            add(status, BorderLayout.CENTER)
+            add(JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
+                add(prevButton)
+                add(pageLabel)
+                add(nextButton)
+            }, BorderLayout.EAST)
+        }
         status.border = JBUI.Borders.empty(2, 6)
 
         add(top, BorderLayout.NORTH)
         add(JBScrollPane(table), BorderLayout.CENTER)
-        add(status, BorderLayout.SOUTH)
+        add(bottom, BorderLayout.SOUTH)
 
         connectButton.addActionListener { connect() }
         databaseBox.addActionListener { if (!updatingCombos) loadTables() }
-        tableBox.addActionListener { if (!updatingCombos) loadRows() }
-        refreshButton.addActionListener { loadRows() }
+        tableBox.addActionListener { if (!updatingCombos) openTable() }
+        refreshButton.addActionListener { loadPage() }
+        prevButton.addActionListener { offset = maxOf(0, offset - PAGE_SIZE); loadPage() }
+        nextButton.addActionListener { offset += PAGE_SIZE; loadPage() }
+        table.tableHeader.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) {
+                val column = table.columnAtPoint(e.point)
+                if (column >= 0) sortBy(table.convertColumnIndexToModel(column))
+            }
+        })
+        updatePager()
 
         loadDevices()
     }
@@ -91,7 +116,7 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
             ui {
                 setItems(databaseBox, databases.map { it.name }, select = false)
                 setItems(tableBox, emptyList())
-                model.data = DebugDbClient.TableData(emptyList(), emptyList(), false)
+                clearTable()
                 status.text = "Connected. ${databases.size} databases."
             }
         }
@@ -104,21 +129,61 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
             val tables = client.tables(database)
             ui {
                 setItems(tableBox, tables, select = false)
+                clearTable()
                 status.text = "$database: ${tables.size} tables"
             }
         }
     }
 
-    private fun loadRows() {
+    /** A new table: back to the first page, no sorting. */
+    private fun openTable() {
+        offset = 0
+        model.sortColumn = null
+        model.sortDescending = false
+        loadPage()
+    }
+
+    /** First click sorts ascending, second descending, third goes back to table order. */
+    private fun sortBy(column: Int) {
+        when {
+            model.sortColumn != column -> { model.sortColumn = column; model.sortDescending = false }
+            !model.sortDescending -> model.sortDescending = true
+            else -> model.sortColumn = null
+        }
+        offset = 0
+        loadPage()
+    }
+
+    private fun loadPage() {
         val client = client ?: return
         val tableName = tableBox.item ?: return
+        val offset = offset
+        val sortColumn = model.sortColumn
+        val descending = model.sortDescending
         background("Loading $tableName") {
-            val data = client.tableData(tableName)
+            val count = client.rowCount(tableName)
+            val data = client.tablePage(tableName, offset, PAGE_SIZE, sortColumn, descending)
             ui {
+                totalRows = count
                 model.data = data
-                status.text = "$tableName: ${data.rows.size} rows" + if (data.editable) "" else " (read-only)"
+                updatePager()
+                status.text = "$tableName: $count rows" + if (data.editable) "" else " (read-only)"
             }
         }
+    }
+
+    private fun clearTable() {
+        offset = 0
+        totalRows = 0
+        model.data = DebugDbClient.TableData(emptyList(), emptyList(), false)
+        updatePager()
+    }
+
+    private fun updatePager() {
+        val shown = model.rowCount
+        pageLabel.text = if (shown == 0) "" else "${offset + 1}–${offset + shown} of $totalRows"
+        prevButton.isEnabled = offset > 0
+        nextButton.isEnabled = offset + shown < totalRows
     }
 
     private fun <T> setItems(box: ComboBox<T>, items: List<T>, select: Boolean = true) {
@@ -148,5 +213,10 @@ class SqliteBrowserPanel(parent: Disposable) : JPanel(BorderLayout()), Disposabl
 
     override fun dispose() {
         client = null
+    }
+
+    companion object {
+        /** Rows per request. Small enough that debug-db's in-memory JSON stays well under the app's heap. */
+        const val PAGE_SIZE = 500
     }
 }

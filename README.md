@@ -8,7 +8,7 @@ It talks to the HTTP server of [Android-Debug-Database](https://github.com/amits
 Android Studio plugin  --adb forward-->  debug-db server (in the debug app)  -->  SQLite files
 ```
 
-**Status:** first step. You can pick a device, connect, pick a database and a table, and see its rows. You can sort by clicking a column header. Editing, filters and the SQL console come next.
+**Status:** first step. You can pick a device, connect, pick a database and a table, and page through its rows, 500 at a time. Click a column header to sort the whole table by it: once ascending, twice descending, three times back to table order. Editing, filters and the SQL console come next.
 
 ## Try it
 
@@ -88,13 +88,14 @@ From reading debug-db 1.0.7's `RequestHandler.java`. The client handles these; t
 - **Edits send every column.** Each row is a list of `{title, isPrimary, dataType, value}`. Primary key columns build the `WHERE`; the string `"null"` means SQL NULL.
 - **BLOBs come back as text**, and every value is typed by SQLite's storage class, not the column's declared type.
 - **`isEditable`** is true only for a plain table (not a view) whose columns all came back.
-- **No paging.** `getAllDataFromTheTable` sends the whole table.
+- **`getAllDataFromTheTable` crashes the app on large tables.** It builds the whole table as one JSON string in the app's memory, and the app dies with `OutOfMemoryError`. So the plugin never calls it. It pages with `SELECT * FROM t LIMIT … OFFSET …` through `query`, which returns the same JSON, primary keys and `isEditable` included.
+- **The server rewrites table names in your SQL.** In `query`, it finds the table name and replaces every occurrence of it in the SQL text with `[name]`. A column `article_id` in table `article` would become `[article]_id`. So the plugin sorts by column number (`ORDER BY 3`), never by name, and the paging SQL contains the table name only once. Filters will need the same care.
 - The `getDbList` rows are `[name, isEncrypted, isDownloadable]`, and the list ends with a fake database, `APP_SHARED_PREFERENCES`.
 
 ## Next steps
 
 1. Inline cell editing: make `TableDataModel` editable when `data.editable` is true, and call `DebugDbClient.updateRow`.
-2. A filter box per column: build a `WHERE` and use `DebugDbClient.query` in place of `tableData`.
+2. A filter box per column: add a `WHERE` to the paging SQL in `DebugDbClient.tablePage`. Column names in it hit the rename problem above.
 3. Row insert and delete.
 4. SQL console tab.
 5. Auto-refresh toggle.

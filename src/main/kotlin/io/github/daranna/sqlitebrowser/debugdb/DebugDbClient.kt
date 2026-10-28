@@ -51,9 +51,28 @@ class DebugDbClient(private val port: Int) {
     fun tables(database: String): List<String> =
         get("getTableList?database=$database").getAsJsonArray("rows").map { it.asString }
 
-    /** All rows of [table] in the database last opened with [tables]. debug-db has no paging. */
+    /**
+     * One page of [table] in the database last opened with [tables].
+     *
+     * We avoid `getAllDataFromTheTable`: it builds the whole table as one JSON string in the app,
+     * which crashes the app with OutOfMemoryError on large tables.
+     *
+     * The server wraps the table name in `[...]` by replacing it everywhere in the SQL, so the SQL
+     * must not contain the name anywhere else. That's why we sort by column number, not by name.
+     *
+     * @param orderBy 0-based column index to sort by, or null for table order.
+     */
     @Synchronized
-    fun tableData(table: String): TableData = parseTableData(get("getAllDataFromTheTable?tableName=$table"))
+    fun tablePage(table: String, offset: Int, limit: Int, orderBy: Int? = null, descending: Boolean = false): TableData {
+        val order = if (orderBy == null) "" else " ORDER BY ${orderBy + 1}" + if (descending) " DESC" else " ASC"
+        return parseTableData(get("query?query=" + encode("SELECT * FROM $table$order LIMIT $limit OFFSET $offset")))
+    }
+
+    @Synchronized
+    fun rowCount(table: String): Long {
+        val data = parseTableData(get("query?query=" + encode("SELECT COUNT(*) FROM $table")))
+        return (data.rows.firstOrNull()?.firstOrNull()?.value as? Number)?.toLong() ?: 0
+    }
 
     /** Runs [sql] against the open database. Several statements may be separated by `;`. */
     @Synchronized
