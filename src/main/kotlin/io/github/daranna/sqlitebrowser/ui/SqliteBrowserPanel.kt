@@ -14,10 +14,13 @@ import io.github.daranna.sqlitebrowser.adb.Adb
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 import java.awt.BorderLayout
 import java.awt.FlowLayout
+import java.awt.GridLayout
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JButton
 import javax.swing.JPanel
+import javax.swing.JScrollPane
+import javax.swing.Timer
 
 /**
  * Device and port on top, then database and table pickers, then the rows, one page at a time.
@@ -43,8 +46,22 @@ class SqliteBrowserPanel(parent: Disposable) :
     private val status = JBLabel()
 
     private val model = TableDataModel()
-    private val table = JBTable(model).apply {
+    private val table: JBTable = object : JBTable(model) {
+        // The table moves its header into the scroll pane every time it is added to one, which takes it out of
+        // columnHeader. Put it back, then put columnHeader in its place.
+        override fun configureEnclosingScrollPane() {
+            super.configureEnclosingScrollPane()
+            val scrollPane = this.parent?.parent as? JScrollPane ?: return
+            columnHeader.add(tableHeader, BorderLayout.NORTH)
+            scrollPane.setColumnHeaderView(columnHeader)
+        }
+    }.apply {
         autoResizeMode = JBTable.AUTO_RESIZE_OFF
+    }
+    private val filterRow = ColumnFilterRow(table, ::filtersEdited)
+    private val columnHeader: JPanel = JPanel(BorderLayout()).apply {
+        add(table.tableHeader, BorderLayout.NORTH)
+        add(filterRow, BorderLayout.SOUTH)
     }
 
     private var client: DebugDbClient? = null
@@ -56,21 +73,43 @@ class SqliteBrowserPanel(parent: Disposable) :
     private var offset = 0
     private var totalRows = 0L
 
+    /** What the user typed per column, in column order; empty until a table is shown. */
+    private var filters: List<String> = emptyList()
+
+    /** Waits for a pause in typing before asking the app for the filtered rows. */
+    private val filterTimer = Timer(FILTER_DELAY_MS) {
+        offset = 0
+        loadPage()
+    }.apply { isRepeats = false }
+
+    /** While no device is listed, looks again: the emulator may have started after this panel opened. */
+    private val devicePoll = Timer(DEVICE_POLL_MS) { if (deviceBox.itemCount == 0) pollDevices() }
+
+    /** Counts page loads, so a slow answer to an old filter doesn't replace the newer one. */
+    private var loadSeq = 0
+
     init {
         Disposer.register(parent, this)
 
-        val top = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
+        // Two rows: a FlowLayout row reports a one-line height, so a single row clips whatever doesn't fit the width.
+        val connection = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             add(JBLabel("Device:"))
             add(deviceBox)
             add(JBLabel("Port:"))
             add(portField)
             add(connectButton)
             add(appLabel)
+        }
+        val picker = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
             add(JBLabel("Database:"))
             add(databaseBox)
             add(JBLabel("Table:"))
             add(tableBox)
             add(refreshButton)
+        }
+        val top = JPanel(GridLayout(2, 1)).apply {
+            add(connection)
+            add(picker)
         }
         val bottom = JPanel(BorderLayout()).apply {
             add(status, BorderLayout.CENTER)
@@ -110,6 +149,23 @@ class SqliteBrowserPanel(parent: Disposable) :
         updatePager()
 
         loadDevices()
+        devicePoll.start()
+    }
+
+    private fun pollDevices() = ApplicationManager.getApplication().executeOnPooledThread {
+        val devices = try {
+            Adb.devices()
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (devices.isNotEmpty()) {
+            ui {
+                if (deviceBox.itemCount == 0) {
+                    setItems(deviceBox, devices)
+                    status.text = "Pick a device and press Connect."
+                }
+            }
+        }
     }
 
     private fun loadDevices() = background("Looking for devices") {
@@ -156,9 +212,15 @@ class SqliteBrowserPanel(parent: Disposable) :
         }
     }
 
-    /** A new table: back to the first page, no sorting. */
+    private fun filtersEdited() {
+        filters = filterRow.texts
+        filterTimer.restart()
+    }
+
+    /** A new table: back to the first page, no sorting, no filters. */
     private fun openTable() {
         offset = 0
+        filters = emptyList()
         model.sortColumn = null
         model.sortDescending = false
         loadPage()
@@ -186,20 +248,47 @@ class SqliteBrowserPanel(parent: Disposable) :
         val offset = offset
         val sortColumn = model.sortColumn
         val descending = model.sortDescending
+        val filters = filters
+        val filtered = filters.any { it.isNotBlank() }
+        val seq = ++loadSeq
         background("Loading $tableName") {
-            val count = client.rowCount(tableName)
-            val data = client.tablePage(tableName, offset, PAGE_SIZE, sortColumn, descending)
+            val count = client.rowCount(tableName, filters)
+            val page = client.tablePage(tableName, offset, PAGE_SIZE, sortColumn, descending, filters)
             ui {
+                if (seq != loadSeq) return@ui
+                // A filtered answer names its columns c0, c1, ...; the real ones come from the unfiltered page.
+                val data = if (filtered) page.copy(columns = model.data.columns, editable = model.data.editable) else page
                 totalRows = count
-                model.data = data
+                showData(data)
+                if (this.filters.size != data.columns.size) this.filters = List(data.columns.size) { "" }
+                filterRow.show(this.filters)
                 updatePager()
-                status.text = "$tableName: $count rows" + if (data.editable) "" else " (read-only)"
+                status.text = if (filtered) "$tableName: $count matching rows" else "$tableName: $count rows"
+                if (!data.editable) status.text += " (read-only)"
+            }
+        }
+    }
+
+    /** Replaces the rows; keeps the column widths the user set when the columns are the same. */
+    private fun showData(data: DebugDbClient.TableData) {
+        val widths = if (data.columns == model.data.columns) {
+            table.columnModel.columns.toList().associate { it.modelIndex to it.width }
+        } else {
+            emptyMap()
+        }
+        model.data = data
+        table.columnModel.columns.toList().forEach { column ->
+            widths[column.modelIndex]?.let {
+                column.preferredWidth = it
+                column.width = it
             }
         }
     }
 
     private fun clearTable() {
         offset = 0
+        filters = emptyList()
+        filterRow.show(emptyList())
         totalRows = 0
         model.data = DebugDbClient.TableData(emptyList(), emptyList(), false)
         updatePager()
@@ -237,11 +326,16 @@ class SqliteBrowserPanel(parent: Disposable) :
     private fun ui(block: () -> Unit) = ApplicationManager.getApplication().invokeLater(block, ModalityState.any())
 
     override fun dispose() {
+        filterTimer.stop()
+        devicePoll.stop()
         client = null
     }
 
     companion object {
         /** Rows per request. Small enough that debug-db's in-memory JSON stays well under the app's heap. */
         const val PAGE_SIZE = 500
+
+        private const val FILTER_DELAY_MS = 400
+        private const val DEVICE_POLL_MS = 2000
     }
 }

@@ -15,6 +15,9 @@ import java.time.Duration
  *
  * Quirks of that server, from its RequestHandler.java:
  * - It keeps state: `getTableList(db)` opens `db`, and every later table call works on it.
+ * - `query` splits the SQL at every `;`. A statement starting with `select` or `pragma` returns rows; any other
+ *   runs with execSQL and returns none. It takes a table name that follows FROM or JOIN and brackets every
+ *   occurrence of it, case-sensitively, even inside other names and string literals.
  * - It handles one request at a time, so calls here are synchronized.
  * - `database` and `tableName` are cut from the URL after the first `=` and never decoded,
  *   so names with spaces or `&` break.
@@ -65,17 +68,47 @@ class DebugDbClient(private val port: Int) {
      * must not contain the name anywhere else. That's why we sort by column number, not by name.
      *
      * @param orderBy 0-based column index to sort by, or null for table order.
+     * @param filters what the user typed per column, in column order (see [filterCondition]); blank means no filter.
+     *   When any is set, the result's columns are named `c0`, `c1`, ... and its `editable` flag is not reliable:
+     *   keep the ones from an unfiltered page.
      */
     @Synchronized
-    fun tablePage(table: String, offset: Int, limit: Int, orderBy: Int? = null, descending: Boolean = false): TableData {
+    fun tablePage(
+        table: String,
+        offset: Int,
+        limit: Int,
+        orderBy: Int? = null,
+        descending: Boolean = false,
+        filters: List<String> = emptyList(),
+    ): TableData {
         val order = if (orderBy == null) "" else " ORDER BY ${orderBy + 1}" + if (descending) " DESC" else " ASC"
-        return parseTableData(get("query?query=" + encode("SELECT * FROM $table$order LIMIT $limit OFFSET $offset")))
+        return parseTableData(get("query?query=" + encode(select(table, filters, "*", "$order LIMIT $limit OFFSET $offset"))))
     }
 
     @Synchronized
-    fun rowCount(table: String): Long {
-        val data = parseTableData(get("query?query=" + encode("SELECT COUNT(*) FROM $table")))
+    fun rowCount(table: String, filters: List<String> = emptyList()): Long {
+        val data = parseTableData(get("query?query=" + encode(select(table, filters, "COUNT(*)", ""))))
         return (data.rows.firstOrNull()?.firstOrNull()?.value as? Number)?.toLong() ?: 0
+    }
+
+    /**
+     * Without filters this is plain `SELECT ... FROM table`. With filters, columns get renamed by position to
+     * `c0`, `c1`, ..., which the conditions then use: in a `UNION ALL` the first SELECT names the columns, and
+     * ours returns no rows.
+     *
+     * It must start with SELECT (debug-db runs anything else with execSQL, which returns no rows) and name no
+     * table but [table] (debug-db picks any name after FROM and brackets it everywhere), so no CTE.
+     */
+    private fun select(table: String, filters: List<String>, projection: String, tail: String): String {
+        val conditions = filters.mapIndexedNotNull { i, text -> filterCondition("c$i", text, table) }
+        if (conditions.isEmpty()) return "SELECT $projection FROM $table$tail"
+        val names = filters.indices.joinToString(", ") { "0 AS c$it" }
+        val sql = "SELECT $projection FROM (SELECT $names WHERE 0 UNION ALL SELECT * FROM $table) WHERE " +
+            conditions.joinToString(" AND ") + tail
+        if (tableName(table).findAll(sql).count() != 1) {
+            throw DebugDbException("Can't filter $table: its name also occurs in the generated SQL, and debug-db would rewrite it.")
+        }
+        return sql
     }
 
     /** Runs [sql] against the open database. Several statements may be separated by `;`. */
