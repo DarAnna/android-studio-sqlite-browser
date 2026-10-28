@@ -122,6 +122,85 @@ class DebugDbClientTest {
     }
 
     @Test
+    fun `filters start with SELECT, name the table once and refer to columns by alias`() {
+        server.responses["query"] = ARTICLE_PAGE
+
+        client.tablePage("article", 0, 500, orderBy = 2, filters = listOf("", "app", ">=1", ""))
+
+        val sql = server.lastQuerySql()
+        assertEquals(
+            "SELECT * FROM (SELECT 0 AS c0, 0 AS c1, 0 AS c2, 0 AS c3 WHERE 0 UNION ALL SELECT * FROM article) " +
+                "WHERE CAST(c1 AS TEXT) LIKE '%app%' ESCAPE '\\' AND c2 >= 1 ORDER BY 3 ASC LIMIT 500 OFFSET 0",
+            sql,
+        )
+        assertEquals(1, Regex("article").findAll(sql).count())
+        // debug-db runs anything not starting with select through execSQL, which returns no rows.
+        assertTrue(sql.startsWith("SELECT "))
+    }
+
+    @Test
+    fun `blank filters leave the plain query`() {
+        server.responses["query"] = ARTICLE_PAGE
+
+        client.tablePage("article", 0, 50, filters = listOf("", "  ", "", ""))
+
+        assertEquals("SELECT * FROM article LIMIT 50 OFFSET 0", server.lastQuerySql())
+    }
+
+    @Test
+    fun `filter text holding the table name is cut so debug-db cannot rewrite it`() {
+        server.responses["query"] = ARTICLE_PAGE
+
+        client.tablePage("article", 0, 50, filters = listOf("", "my article's", "", ""))
+
+        val sql = server.lastQuerySql()
+        assertEquals(1, Regex("article").findAll(sql).count())
+        assertTrue(sql.contains("'%my a'||'rticle''s%'"))
+    }
+
+    @Test
+    fun `filter operators compare, numbers unquoted and text quoted`() {
+        assertEquals("c0 > 5", filterCondition("c0", "> 5", "t"))
+        assertEquals("c0 IN (5, '5')", filterCondition("c0", "=5", "t"))
+        assertEquals("(c0 IS NULL OR c0 NOT IN (5, '5'))", filterCondition("c0", "<>5", "t"))
+        assertEquals("c0 IS NOT 'x'", filterCondition("c0", "!=x", "t"))
+        assertEquals("c0 = 'a''b'", filterCondition("c0", "=a'b", "t"))
+        assertEquals("c0 <= -1.5", filterCondition("c0", "<=-1.5", "t"))
+        assertNull(filterCondition("c0", ">", "t"))
+    }
+
+    @Test
+    fun `LIKE wildcards typed by the user match literally`() {
+        assertEquals("CAST(c0 AS TEXT) LIKE '%50\\%\\_x%' ESCAPE '\\'", filterCondition("c0", "50%_x", "t"))
+    }
+
+    @Test
+    fun `semicolons stay out of the SQL, since debug-db splits statements there`() {
+        assertEquals("c0 = 'a'||char(59)||'b'", filterCondition("c0", "=a;b", "t"))
+    }
+
+    @Test(expected = DebugDbException::class)
+    fun `filtering fails clearly when the table name is also in the generated SQL`() {
+        // "c0" is also the alias of the first column.
+        client.tablePage("c0", 0, 50, filters = listOf("a"))
+    }
+
+    @Test
+    fun `rowCount applies the filters`() {
+        server.responses["query"] =
+            """{"tableInfos":[],"isSuccessful":true,"rows":[[{"dataType":"integer","value":3}]],
+               |"errorMessage":null,"isEditable":false,"isSelectQuery":true}
+            """.trimMargin()
+
+        assertEquals(3L, client.rowCount("article", listOf("x", "")))
+        assertEquals(
+            "SELECT COUNT(*) FROM (SELECT 0 AS c0, 0 AS c1 WHERE 0 UNION ALL SELECT * FROM article) " +
+                "WHERE CAST(c0 AS TEXT) LIKE '%x%' ESCAPE '\\'",
+            server.lastQuerySql(),
+        )
+    }
+
+    @Test
     fun `rowCount reads the single value`() {
         server.responses["query"] =
             """{"tableInfos":[],"isSuccessful":true,"rows":[[{"dataType":"integer","value":150000}]],

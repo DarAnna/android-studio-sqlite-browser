@@ -193,6 +193,23 @@ check_article_name_sort_trap() {
     [[ "$ok" == false ]]
 }
 
+check_article_filter() {
+    # The SQL the plugin sends for filters "article 1" on name and ">=100" on price (DebugDbClient.select):
+    # columns renamed by position, the table named once, and the lowercase "article" in the literal cut in two.
+    # Names are "Article <i>" and prices 1000/i, so that leaves ids 1 and 10.
+    local renamed="SELECT 0 AS c0, 0 AS c1, 0 AS c2, 0 AS c3 WHERE 0 UNION ALL SELECT * FROM article"
+    local where="CAST(c1 AS TEXT) LIKE '%a'||'rticle 1%' ESCAPE '\\' AND c2 >= 100"
+    local body ok ids n eq
+    get "getTableList?database=shop.db" >/dev/null
+    body="$(query "SELECT * FROM ($renamed) WHERE $where ORDER BY 1 ASC LIMIT 500 OFFSET 0")"
+    ok="$(jq -r '.isSuccessful' <<<"$body")"
+    ids="$(jq -r '[.rows[][0].value] | join(",")' <<<"$body")"
+    n="$(query "SELECT COUNT(*) FROM ($renamed) WHERE $where" | first_value)"
+    eq="$(query "SELECT * FROM ($renamed) WHERE c0 IN (7, '7') LIMIT 500 OFFSET 0" | jq -r '[.rows[][0].value] | join(",")')"
+    echo "isSuccessful=$ok ids=$ids count=$n =7 gives $eq"
+    [[ "$ok" == true && "$ids" == "1,10" && "$n" == 2 && "$eq" == 7 ]]
+}
+
 check_settings_db() {
     local n
     get "getTableList?database=settings.db" >/dev/null
@@ -214,6 +231,7 @@ check "big_table page of 500 rows via query" check_big_table_page
 check "big_table COUNT(*) matches seeded rows" check_big_table_count
 check "article sorted by column number" check_article_number_sort
 check "article sorted by name hits the table-name rewrite" check_article_name_sort_trap
+check "article filtered by column, as the plugin filters" check_article_filter
 check "settings.db flag table readable" check_settings_db
 check "app process still alive" check_app_alive
 
