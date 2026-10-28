@@ -6,14 +6,14 @@ Unscheduled feature ideas. Nothing here is committed to.
 
 In this order:
 
-1. Remember device, port and open tabs (database and table each) across IDE restarts, with IntelliJ's `PersistentStateComponent`. On start, reconnect only if the same app still answers on the saved port, and reopen only databases it still lists.
-2. Editing in the table view. The client already has `updateRow`, `addRow` and `deleteRow`.
-3. Query window for own queries, as another kind of tab next to `TableView`. Page with `SELECT * FROM (<sql>) LIMIT … OFFSET …`, and warn when the user's SQL breaks the table name rule.
+1. Editing in the table view. The client already has `updateRow`, `addRow` and `deleteRow`.
+2. Query window for own queries, as another kind of tab next to `TableView`. Page with `SELECT * FROM (<sql>) LIMIT … OFFSET …`, and warn when the user's SQL breaks the table name rule.
 
 Later: editing in query results. A free-form result has no single table or primary keys, so this probably only works for a plain `SELECT * FROM t …`.
 
 Done:
 - Tabs, a database tree and a compact connection bar ([#2](https://github.com/DarAnna/android-studio-sqlite-browser/pull/2)). Tabs load through `DebugDbClient.withDatabase`, which reopens their database when another tab switched it.
+- Device, port and open tabs kept across IDE restarts (`SavedSession`, in the workspace file). On start the panel reconnects only if the same app answers on the saved port, and reopens only tabs whose database and table the app still has.
 
 Settled: SharedPreferences don't show up in apps that use DataStore instead, because debug-db only lists `shared_prefs/` XML files.
 
