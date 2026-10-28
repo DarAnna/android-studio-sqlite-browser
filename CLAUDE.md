@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Android Studio plugin (Kotlin, IntelliJ Platform Gradle Plugin 2.x) that shows a debug app's SQLite databases live. The backend is the HTTP server of Android-Debug-Database (debug-db) 1.0.7 inside the app, reached through `adb forward`. README.md has the full picture; read its "debug-db quirks" before touching `DebugDbClient`.
+Android Studio plugin (Kotlin, IntelliJ Platform Gradle Plugin 2.x) that shows a debug app's SQLite databases live. The backend is the HTTP server of Android-Debug-Database (debug-db) 1.0.7 inside the app, reached through `adb forward`. CONTRIBUTING.md has the full picture; read its "debug-db quirks" before touching `DebugDbClient`. README.md is for users of the plugin.
 
 ## Commands
 
