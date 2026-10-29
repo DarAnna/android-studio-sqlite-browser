@@ -1,7 +1,9 @@
 package io.github.daranna.sqlitebrowser.debugdb
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UserSqlTest {
@@ -87,5 +89,25 @@ class UserSqlTest {
     @Test
     fun `blank SQL has no statements`() {
         assertEquals(emptyList<String>(), rewritten("  -- nothing\n ; "))
+    }
+
+    @Test
+    fun `SQL is read-only when no statement can write`() {
+        listOf(
+            "SELECT * FROM article",
+            "select 1;\nVALUES (2)",
+            "WITH a AS (SELECT 1) SELECT * FROM a",
+            "PRAGMA user_version",
+            "PRAGMA table_info(article); SELECT 1",
+        ).forEach { assertTrue(it, UserSql.parse(it).readOnly) }
+        listOf(
+            "",
+            "SELECT 1; DELETE FROM article",
+            "UPDATE article SET note = 'x'",
+            "WITH a AS (SELECT 1) INSERT INTO t SELECT * FROM a",
+            "PRAGMA user_version = 3",
+            "PRAGMA journal_mode(WAL)",
+            "CREATE TABLE t (a)",
+        ).forEach { assertFalse(it, UserSql.parse(it).readOnly) }
     }
 }

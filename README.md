@@ -30,6 +30,10 @@ This plugin does the same job as the Database Inspector, but better. It starts w
   - Several statements separated by `;` run in order, and you see the result of the last one. Paging and sorting run only that last `SELECT` again, never the statements before it.
   - Writes (`UPDATE`, `INSERT`, `DELETE`, …) go straight into the app's database. Query results can't be edited in the grid.
   - The SQL is kept when you restart Android Studio, but it doesn't run until you press **Run**.
+  - **New Query** on a database starts with the SQL you last ran there, even after you closed its tab. On a table, it starts with `SELECT * FROM` that table.
+  - The list beside the editor shows the database's **Favorites** and its 20 most **Recent** queries. Click one to open it: a query that only reads (`SELECT`, `PRAGMA table_info(…)`, …) runs right away; one that may change data waits for **Run**. It replaces the editor's SQL when that is empty or saved too, and otherwise opens in a new tab. The list button next to **Run** hides the list in all tabs.
+  - The ☆ next to **Run** adds the editor's SQL to Favorites, named after its first line, and removes it again. Right-click a favorite (or press F2) to rename it, or a recent query to add it to Favorites. Favorites and recent queries are kept per app and database, in all your projects.
+  - The editor highlights SQL and completes keywords and the database's table and column names (Ctrl+Space). It learns the names when the tab opens, on reconnect, and after you run `CREATE`, `DROP` or `ALTER`.
 
 ## Usage
 

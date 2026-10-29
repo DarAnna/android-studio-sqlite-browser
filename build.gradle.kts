@@ -31,6 +31,7 @@ dependencies {
         } else {
             androidStudio(providers.gradleProperty("androidStudioVersion").get())
         }
+        bundledPlugin("org.jetbrains.android")
         testFramework(TestFrameworkType.Platform)
     }
 }

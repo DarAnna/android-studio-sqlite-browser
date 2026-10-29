@@ -14,7 +14,7 @@ import javax.swing.tree.TreePath
 
 class DatabaseTreeTest {
 
-    private val tree = DatabaseTree(JBLabel(), { _, _ -> }, { _, _ -> }).apply {
+    private val tree = DatabaseTree(LabelStatus(JBLabel()), { _, _ -> }, { _, _ -> }).apply {
         show(null, listOf(DebugDbClient.Database("shop.db", false)))
     }
 
