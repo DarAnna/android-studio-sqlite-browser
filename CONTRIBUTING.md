@@ -38,17 +38,23 @@ To try it, use [the sample app](sample-app), never a real app's database: the re
 
 | File | What it does |
 |---|---|
-| `src/main/resources/META-INF/plugin.xml` | Tells the IDE what the plugin adds. Here: one tool window. |
+| `src/main/resources/META-INF/plugin.xml` | Tells the IDE what the plugin adds. Here: one tool window, and keyword completion for the query tab. |
 | `ui/SqliteBrowserToolWindowFactory.kt` | The IDE calls this the first time the tool window opens. |
 | `ui/SqliteBrowserPanel.kt` | The Swing panel: the connection bar, the database tree and a tab per opened table. |
 | `ui/SavedSession.kt` | Device, port, app and open tabs, kept in the workspace file across IDE restarts. |
+| `ui/SavedQueries.kt` | The SQL last run on each database, and favorite queries; application-wide, keyed by app and database. |
+| `ui/FavoritesDialog.kt` | Lists an app's favorites to open, rename or delete. |
 | `ui/DatabaseTree.kt` | Databases and their tables; tables load when a database is expanded. |
 | `ui/TableView.kt` | One table in a tab: paging, sorting, a filter per column, editing. |
 | `ui/AddRowDialog.kt` | Asks for the values of a new row. |
+| `ui/QueryView.kt` | A query tab: the user's SQL, run through `UserSql`, and its rows. |
+| `ui/SqlEditor.kt` | The query tab's editor, in the Android plugin's SQLite language, fed the database's tables and columns. |
+| `ui/SqlKeywordCompletion.kt` | Adds SQL keywords to that editor's completion. |
 | `ui/Threads.kt` | `background()` and `ui()`: run slow work off the EDT and come back to it. |
 | `ui/TableDataModel.kt` | Feeds rows to the `JBTable` and passes cell edits on to `TableView`. |
 | `debugdb/DebugDbClient.kt` | Calls debug-db's HTTP endpoints and parses the JSON. |
 | `debugdb/ColumnFilter.kt` | Turns what the user typed in a filter box into an SQL condition. |
+| `debugdb/UserSql.kt` | Splits and rewrites the user's SQL so debug-db runs it as written. |
 | `adb/Adb.kt` | Finds and runs the `adb` binary: list devices, `adb forward`. |
 
 ### Plugin basics worth knowing
@@ -57,6 +63,7 @@ To try it, use [the sample app](sample-app), never a real app's database: the re
 - **The UI is Swing.** IntelliJ adds its own versions of the usual parts (`JBTable`, `JBLabel`, `ComboBox`); use them so the plugin follows the IDE theme.
 - **Two kinds of thread.** Touch Swing parts only on the UI thread (the *EDT*). Do slow work, like adb and HTTP, on a background thread. `background()` and `ui()` in `ui/Threads.kt` show the pattern. If you block the EDT, the whole IDE freezes.
 - **Disposables.** Things that must be cleaned up register with a parent `Disposable`; the IDE disposes them when the tool window or project closes.
+- **The Android plugin.** The query tab's editor uses Android Studio's own SQLite language, the one of Room's `@Query`, so plugin.xml `<depends>` on `org.jetbrains.android`. Table and column names reach it through the Database Inspector's `SqliteSchemaContext`, which reads a `SqliteSchema` from the edited file's user data. These are internal classes, not an API: after a Studio update, `SqlEditorCompletionTest` and `verifyPlugin` tell whether they moved.
 - **Debugging.** Run the `runIde` task in debug mode from IntelliJ IDEA (or Android Studio) and breakpoints in the plugin work in the sandbox.
 
 Docs: [IntelliJ Platform SDK](https://plugins.jetbrains.com/docs/intellij/welcome.html), especially *Tool Windows*, *Threading Model* and *Android Studio Plugin Development*.

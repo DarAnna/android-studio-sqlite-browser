@@ -9,10 +9,13 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <!-- The query tab's SQL language and its schema hook (see SqlEditor). -->
+    <depends>org.jetbrains.android</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="SQLite Browser"
                     anchor="bottom"
                     factoryClass="io.github.daranna.sqlitebrowser.ui.SqliteBrowserToolWindowFactory"/>
+        <completion.contributor language="RoomSql" implementationClass="io.github.daranna.sqlitebrowser.ui.SqlKeywordCompletion"/>
     </extensions>
 </idea-plugin>

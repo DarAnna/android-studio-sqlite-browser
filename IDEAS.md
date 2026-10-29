@@ -4,22 +4,7 @@ Unscheduled feature ideas. Nothing here is committed to.
 
 ## Next steps (before the ideas below)
 
-1. Syntax highlighting and autocomplete in the query tab. `QueryView` uses a plain `JBTextArea` now.
-
-   Things to settle:
-   - Which SQL language to use. Android Studio has no DataGrip SQL plugin, but its Android plugin has its own SQLite dialect for Room's `@Query`. Check whether a plugin can reuse it (with `<depends>org.jetbrains.android</depends>`) in an `EditorTextField` or a `LightVirtualFile`, and whether that is a stable API. If not, write a small SQLite lexer for highlighting only.
-   - Where completion gets names from: the open database's tables (`tables()`) and their columns (`PRAGMA table_info` through `query`). Load them once when the tab opens, and again on Refresh. Plus SQL keywords.
-   - The editor must keep ⌘⏎ / Ctrl+Enter to run, running the selection when there is one.
-
-2. Keep the last query, and favorite queries with a list of favorites.
-
-   Open query tabs already keep their SQL across restarts (`SavedSession.Tab.query`), but closing a tab loses it.
-
-   Things to settle:
-   - The last query: per database, the SQL last run there, even after its tab is closed. **New Query** on that database starts with it instead of `SELECT * FROM <table>`, or offers it. Save it on Run, not on every keystroke.
-   - Favorites: a star button in the query tab saves its SQL under a name. A list of favorites (a popup next to **New Query**, or a node in the tree) opens one in a new query tab, without running it, since it may hold writes. Rename and delete from the list.
-   - Where they live: the workspace file like `SavedSession` (per project), or application-level settings (shared across projects). Keyed by app and database name, since the same SQL rarely fits another app's schema. Maybe also a "favorites from all databases" view.
-   - Favorites outlive the app's schema: a saved query may name a table that is gone. It just fails on Run with debug-db's error; no check needed up front.
+None queued.
 
 Later: editing in query results. A free-form result has no single table or primary keys, so this probably only works for a plain `SELECT * FROM t …`.
 
@@ -27,6 +12,8 @@ Done:
 - Tabs, a database tree and a compact connection bar ([#2](https://github.com/DarAnna/android-studio-sqlite-browser/pull/2)). Tabs load through `DebugDbClient.withDatabase`, which reopens their database when another tab switched it.
 - Device, port and open tabs kept across IDE restarts (`SavedSession`, in the workspace file). On start the panel reconnects only if the same app answers on the saved port, and reopens only tabs whose database and table the app still has.
 - Editing in the table view: edit a cell, set it to NULL, add a row, delete rows. Only tables with a single-column primary key can have rows edited or deleted, since debug-db picks the row by the first key column alone; the key comes from `PRAGMA table_info`.
+- Last query and favorites (`SavedQueries`, application-level, keyed by app and database). Run keeps the SQL it sent as the database's last query; **New Query** on a database starts with it, on a table still with `SELECT * FROM <table>`. The star in a query tab saves its SQL under a name; **Favorites** next to **New Query** lists the app's favorites to open (without running), rename or delete. A favorite naming a table that is gone just fails on Run.
+- Highlighting and completion in the query tab (`SqlEditor`): Android Studio's Room SQL language in an `EditorTextField` on a `LightVirtualFile`, with names through the Database Inspector's `SqliteSchemaContext` and keywords from `SqlKeywordCompletion`. Internal Android plugin classes, not an API; `SqlEditorCompletionTest` catches a move.
 - Query tabs (`QueryView`), opened with **New Query** above the tree or its right-click menu. A last `SELECT` pages with `SELECT * FROM (<sql>) LIMIT … OFFSET …`. Instead of warning about the table name rule, `UserSql` hides table names from debug-db (`FROM"article"`), so the rule doesn't apply and results keep their own column names. See CONTRIBUTING.md.
 
 Settled: SharedPreferences don't show up in apps that use DataStore instead, because debug-db only lists `shared_prefs/` XML files.
