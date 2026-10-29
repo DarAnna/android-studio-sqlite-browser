@@ -1,6 +1,7 @@
 package io.github.daranna.sqlitebrowser.ui
 
 import com.intellij.icons.AllIcons
+import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.application.ApplicationManager
@@ -8,8 +9,9 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.ui.InplaceButton
+import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
@@ -38,8 +40,9 @@ import javax.swing.KeyStroke
  * The editor completes the database's table and column names, loaded when the tab opens, on reconnect, and after
  * SQL that changes the schema.
  *
- * The SQL each Run sends is kept as the database's last query in [SavedQueries], and the star saves the editor's SQL
- * there as a favorite.
+ * The SQL each Run sends is kept in the database's recent queries in [SavedQueries], and the star keeps the editor's
+ * SQL there as a favorite. Both are listed beside the editor, in a [SavedQueryList]; a click on one runs it right
+ * away when it only reads, and otherwise only puts it in the editor, since it may hold writes.
  */
 class QueryView(
     project: Project,
@@ -48,6 +51,8 @@ class QueryView(
     sql: String,
     client: DebugDbClient,
     private val onSqlChanged: () -> Unit,
+    /** Opens SQL in a new query tab on the same database, for a saved query that would replace edited SQL here. */
+    private val openInNewTab: (String) -> Unit,
 ) : BrowserTab() {
 
     override var client: DebugDbClient = client
@@ -61,9 +66,15 @@ class QueryView(
     private val runButton = JButton("Run", AllIcons.Actions.Execute).apply {
         toolTipText = "Run the selected SQL, or all of it (${if (SystemInfo.isMac) "⌘⏎" else "Ctrl+Enter"})"
     }
-    private val favoriteButton = JButton("Add to Favorites", AllIcons.Nodes.Favorite).apply {
-        toolTipText = "Save this SQL under a name, to open it again from Favorites"
+    private val starButton = JButton().apply { isFocusable = false }
+
+    /** In place of the saved queries while they are hidden, at the same edge, to bring them back. */
+    private val savedStrip = JPanel(BorderLayout()).apply {
+        border = JBUI.Borders.compound(JBUI.Borders.customLineRight(JBColor.border()), JBUI.Borders.empty(2))
+        add(InplaceButton("Show saved queries", AllIcons.Actions.ListFiles) { setSavedShown(true) }, BorderLayout.NORTH)
     }
+    private val savedList = SavedQueryList(app, database, this, onHide = { setSavedShown(false) }, onOpen = ::openSaved)
+    private val sides = OnePixelSplitter(false, "sqliteBrowser.savedQueries.proportion", 0.25f)
     private val prevButton = JButton("◀")
     private val nextButton = JButton("▶")
     private val pageLabel = JBLabel()
@@ -91,7 +102,7 @@ class QueryView(
             add(
                 JPanel(FlowLayout(FlowLayout.LEFT, 4, 2)).apply {
                     add(runButton)
-                    add(favoriteButton)
+                    add(starButton)
                 },
                 BorderLayout.SOUTH,
             )
@@ -112,16 +123,23 @@ class QueryView(
             add(JBScrollPane(table), BorderLayout.CENTER)
             add(bottom, BorderLayout.SOUTH)
         }
-        add(
-            OnePixelSplitter(true, 0.3f).apply {
-                firstComponent = top
-                secondComponent = results
-            },
-            BorderLayout.CENTER,
-        )
+        sides.firstComponent = savedList.component
+        sides.secondComponent = OnePixelSplitter(true, 0.3f).apply {
+            firstComponent = top
+            secondComponent = results
+        }
+        add(savedStrip, BorderLayout.WEST)
+        add(sides, BorderLayout.CENTER)
 
         runButton.addActionListener { runSql() }
-        favoriteButton.addActionListener { addToFavorites() }
+        starButton.addActionListener { toggleFavorite() }
+        ApplicationManager.getApplication().messageBus.connect(this).subscribe(
+            SavedQueries.TOPIC,
+            SavedQueries.Listener {
+                updateStar()
+                showSaved()
+            },
+        )
         // On the component, so it wins over the keymap's ⌘⏎ (Split Line) in the editor.
         DumbAwareAction.create { runSql() }.registerCustomShortcutSet(
             CustomShortcutSet(
@@ -133,7 +151,10 @@ class QueryView(
         )
         editor.document.addDocumentListener(
             object : DocumentListener {
-                override fun documentChanged(event: DocumentEvent) = onSqlChanged()
+                override fun documentChanged(event: DocumentEvent) {
+                    updateStar()
+                    onSqlChanged()
+                }
             },
             this,
         )
@@ -155,6 +176,8 @@ class QueryView(
             }
         })
         updatePager()
+        updateStar()
+        showSaved()
         status.text = "SQL on $database. Press Run."
         loadSchema()
     }
@@ -172,25 +195,61 @@ class QueryView(
         }
     }
 
-    private fun addToFavorites() {
+    private fun toggleFavorite() {
         if (sql.isBlank()) return run { status.text = "Nothing to save" }
-        val name = Messages.showInputDialog(
-            this,
-            "Name. A favorite of that name on $database is replaced.",
-            "Add to Favorites",
-            null,
-            sql.trim().lineSequence().first().take(FAVORITE_NAME_LENGTH),
-            NON_BLANK,
-        )?.trim() ?: return
-        SavedQueries.get().addFavorite(app, database, name, sql)
-        status.text = "Saved to Favorites as \"$name\""
+        val favorite = SavedQueries.get().favoriteOf(app, database, sql)
+        if (favorite != null) {
+            SavedQueries.change { delete(favorite) }
+            status.text = "Removed \"${favorite.name}\" from Favorites"
+        } else {
+            val added = SavedQueries.change { addFavorite(app, database, sql) }
+            status.text = "Saved to Favorites as \"${added.name}\". Right-click it in the list to rename."
+        }
+    }
+
+    private fun setSavedShown(shown: Boolean) {
+        savedShown = shown
+        SavedQueries.changed()
+    }
+
+    private fun showSaved() {
+        savedList.component.isVisible = savedShown
+        savedStrip.isVisible = !savedShown
+        revalidate()
+    }
+
+    private fun updateStar() {
+        val favorite = sql.isNotBlank() && SavedQueries.get().favoriteOf(app, database, sql) != null
+        starButton.icon = if (favorite) AllIcons.Nodes.Favorite else AllIcons.Nodes.NotFavoriteOnHover
+        starButton.toolTipText = if (favorite) "Remove this SQL from Favorites" else "Add this SQL to Favorites"
+    }
+
+    /**
+     * Puts [query] in this editor when that loses nothing: it is empty, or holds SQL that is saved too. Otherwise in a
+     * new tab, so edited SQL stays.
+     */
+    private fun openSaved(query: SavedQueries.Query) {
+        val queries = SavedQueries.get()
+        val saved = queries.favoriteOf(app, database, sql) != null || queries.recentOf(app, database).any { it.sql.trim() == sql.trim() }
+        if (sql.isNotBlank() && !saved) return openInNewTab(query.sql)
+        editor.component.text = query.sql
+        runIfReadOnly()
+    }
+
+    /** Runs the editor's SQL if it can't change the app's data; otherwise says why it waits for Run. */
+    fun runIfReadOnly() {
+        if (UserSql.parse(sql).readOnly) {
+            runSql()
+        } else {
+            status.text = "This SQL may change data. Press Run to run it."
+        }
     }
 
     private fun runSql() {
         val text = editor.selectedText?.takeIf { it.isNotBlank() } ?: editor.text
         val parsed = UserSql.parse(text)
         if (parsed.statements.isEmpty()) return run { status.text = "Nothing to run" }
-        SavedQueries.get().setLast(app, database, text)
+        SavedQueries.change { addRecent(app, database, text) }
         val client = client
         val seq = ++loadSeq
         // The old rows would page and sort as if they were the new query's.
@@ -266,6 +325,12 @@ class QueryView(
 
     private companion object {
         val SCHEMA_CHANGES = setOf("CREATE", "DROP", "ALTER")
-        const val FAVORITE_NAME_LENGTH = 40
+
+        const val SAVED_SHOWN = "sqliteBrowser.savedQueries.shown"
+
+        /** Whether query tabs show [SavedQueryList], the same in every tab. */
+        var savedShown: Boolean
+            get() = PropertiesComponent.getInstance().getBoolean(SAVED_SHOWN, true)
+            set(value) = PropertiesComponent.getInstance().setValue(SAVED_SHOWN, value, true)
     }
 }

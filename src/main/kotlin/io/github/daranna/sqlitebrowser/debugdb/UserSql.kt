@@ -27,6 +27,9 @@ class UserSql private constructor(
     /** The statements to run once, in order, before paging [select]; all of them when there is no [select]. */
     val leading: List<String> = if (select == null) statements else statements.dropLast(1)
 
+    /** Whether every statement only reads, so running it unasked can't change the app's data. */
+    val readOnly: Boolean = statements.isNotEmpty() && statements.indices.all { readsOnly(statements[it], words[it]) }
+
     companion object {
         fun parse(sql: String): UserSql {
             val statements = mutableListOf<String>()
@@ -138,6 +141,18 @@ class UserSql private constructor(
             "WITH" -> words.none { it in WRITES }
             else -> false
         }
+
+        /** A PRAGMA sets its value with `=` or, for most of them, with an argument: `PRAGMA journal_mode(WAL)`. */
+        private fun readsOnly(statement: String, words: List<String>): Boolean = when (words.firstOrNull()) {
+            "PRAGMA" -> '=' !in statement && ('(' !in statement || words.getOrNull(1) in PRAGMAS_WITH_ARGUMENT)
+            else -> returnsRows(words)
+        }
+
+        /** PRAGMAs whose argument names what to read rather than a value to set. */
+        private val PRAGMAS_WITH_ARGUMENT = setOf(
+            "TABLE_INFO", "TABLE_XINFO", "INDEX_INFO", "INDEX_XINFO", "INDEX_LIST", "FOREIGN_KEY_LIST",
+            "FOREIGN_KEY_CHECK", "INTEGRITY_CHECK", "QUICK_CHECK",
+        )
 
         private val HIDE_AFTER = setOf("FROM", "JOIN", "INTO", "UPDATE", "TABLE")
 

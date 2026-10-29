@@ -65,10 +65,6 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
         toolTipText = "Write SQL for the selected table, or start from the SQL last run on the selected database"
         isEnabled = false
     }
-    private val favoritesButton = JButton("Favorites", AllIcons.Nodes.Favorite).apply {
-        toolTipText = "Open one of this app's favorite queries in a new tab"
-        isEnabled = false
-    }
     private val tabs = JBTabbedPane()
 
     private var client: DebugDbClient? = null
@@ -113,7 +109,6 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
                 add(
                     JPanel(FlowLayout(FlowLayout.LEFT, 4, 2)).apply {
                         add(newQueryButton)
-                        add(favoritesButton)
                     },
                     BorderLayout.NORTH,
                 )
@@ -129,11 +124,6 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
         newQueryButton.addActionListener {
             val (database, table) = tree.queryTarget() ?: return@addActionListener run { status.text = "The app has no database to query." }
             openQuery(database, table)
-        }
-        favoritesButton.addActionListener {
-            val app = connection?.owner ?: return@addActionListener
-            val dialog = FavoritesDialog(project, SavedQueries.get(), app)
-            if (dialog.showAndGet()) dialog.selected?.let { openQuery(it.database, sql = it.sql) }
         }
         portField.addActionListener { connect() }
         tabs.addMouseListener(object : MouseAdapter() {
@@ -232,7 +222,6 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
                 saved.app = owner
                 tree.show(newClient, databases)
                 newQueryButton.isEnabled = true
-                favoritesButton.isEnabled = true
                 if (sameApp) views().forEach { it.client = newClient } else views().forEach(::closeTab)
                 reopen.forEach { tab -> tab.query?.let { openQuery(tab.database, sql = it) } ?: openTable(tab.database, tab.table) }
                 views().firstOrNull { it.savedTab() == savedSelection }?.let(tabs::setSelectedComponent)
@@ -260,11 +249,13 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
      * Opens a new query tab on [database], with [sql] in it; by default a SELECT of [table], or with no table the SQL
      * last run on [database]. It doesn't run yet: saved SQL may hold writes.
      */
-    private fun openQuery(database: String, table: String? = null, sql: String? = null) {
-        val client = client ?: return
-        val app = connection?.owner ?: return
+    private fun openQuery(database: String, table: String? = null, sql: String? = null): QueryView? {
+        val client = client ?: return null
+        val app = connection?.owner ?: return null
         val text = sql ?: table?.let { "SELECT * FROM $it" } ?: SavedQueries.get().lastQuery(app, database).orEmpty()
-        addTab(QueryView(project, app, database, text, client, ::saveTabs))
+        val view = QueryView(project, app, database, text, client, ::saveTabs) { openQuery(database, sql = it)?.runIfReadOnly() }
+        addTab(view)
+        return view
     }
 
     private fun addTab(view: BrowserTab) {

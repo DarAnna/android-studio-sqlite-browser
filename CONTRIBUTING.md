@@ -42,8 +42,8 @@ To try it, use [the sample app](sample-app), never a real app's database: the re
 | `ui/SqliteBrowserToolWindowFactory.kt` | The IDE calls this the first time the tool window opens. |
 | `ui/SqliteBrowserPanel.kt` | The Swing panel: the connection bar, the database tree and a tab per opened table. |
 | `ui/SavedSession.kt` | Device, port, app and open tabs, kept in the workspace file across IDE restarts. |
-| `ui/SavedQueries.kt` | The SQL last run on each database, and favorite queries; application-wide, keyed by app and database. |
-| `ui/FavoritesDialog.kt` | Lists an app's favorites to open, rename or delete. |
+| `ui/SavedQueries.kt` | Recent and favorite queries; application-wide, keyed by app and database. Change them through `SavedQueries.change`, which tells every query tab. |
+| `ui/SavedQueryList.kt` | A database's favorites and recent queries, beside a query tab's editor. |
 | `ui/DatabaseTree.kt` | Databases and their tables; tables load when a database is expanded. |
 | `ui/TableView.kt` | One table in a tab: paging, sorting, a filter per column, editing. |
 | `ui/AddRowDialog.kt` | Asks for the values of a new row. |
