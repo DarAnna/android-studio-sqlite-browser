@@ -56,3 +56,15 @@ Things to settle:
 - Which database: the entity is listed in a `@Database(entities = […])` class, but the file name only appears in `Room.databaseBuilder(…, "name.db")`, which may be built at runtime. Simpler: ask the connected app which of its databases has that table, and offer a choice when several do. Remember that `databases()` comes before `tables()`, and only names it returned may be passed.
 - Not connected: open the panel and connect first, or show a hint instead of the icon doing nothing.
 - Maybe also: a `@Query` in a `@Dao` opens in a query tab with its SQL, with `:param` placeholders left for the user to fill in.
+
+## 4. Search tables and columns
+
+Two searches for big schemas:
+- **Tables:** a search field above the database tree that narrows it to tables whose name matches, across every database. The names are already loaded for the tree, so this needs no request to debug-db.
+- **Columns in a wide table:** in a table or query tab, type part of a column name to jump to that column: scroll it into view and select it. Maybe also hide the columns that don't match.
+
+Things to settle:
+- Tables: a tree speed search (IntelliJ's `TreeSpeedSearch`, type while the tree has focus) may be enough, instead of a separate field.
+- Tables: a database whose tables haven't been listed yet. Listing them means `tables(db)`, which switches the server's open database (other tabs reopen theirs through `withDatabase`).
+- Columns: the column names come from the loaded page's header, so search works the same in table and query tabs and sends nothing to the app.
+- Columns: maybe also search across tables ("which table has `article_id`?") with each table's `PRAGMA table_info`, like the reverse foreign key idea above.

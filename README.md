@@ -1,12 +1,12 @@
 # SQLite Browser for Android Studio
 
-Look at your debug app's SQLite databases, live, but everything that annoyed me about Database Inspector was fixed.
+Look at your debug app's SQLite databases, live, but I fixed everything that annoyed me about Database Inspector.
+
+![The article table filtered to prices over 50 and sorted by price, next to the tree of databases and tables](docs/screenshots/filter-and-sort.png)
 
 ## Why
 
-Android Studio's App Inspection (the Database Inspector) is painful to use. You can see a table, but you can't simply narrow it down: for a simple filter you still write SQL by hand.
-
-This plugin does the same job as the Database Inspector, but better. It starts with the basics the Inspector gets wrong, filtering first, and more is coming.
+This plugin does the same job as the App Inspection's Database Inspector plus more features:
 
 ## Features
 
@@ -17,6 +17,9 @@ This plugin does the same job as the Database Inspector, but better. It starts w
 - **Sort by any column.** Click a header to sort the whole table by it: once ascending, twice descending, a third time back to table order.
 - **Big tables are fine.** Rows load 500 at a time, so a table with hundreds of thousands of rows opens fast and doesn't run your app out of memory.
 - **Follow foreign keys.** A cell of a foreign key column has an arrow: click it (or right-click the cell) to open the table it refers to in a new tab, filtered to the rows with that value, e.g. the article a purchase names. Its filter box holds `=value`; clear it to see the whole table. Close the tab to go back to where you came from. Keys over several columns aren't followed.
+
+  ![The purchase table, with an arrow in each article_id cell and the tooltip "Open article where article_id = 8"](docs/screenshots/foreign-key.png)
+
 - **Tabs.** All databases and their tables sit in a tree; double-click a table to open it in its own tab. Keep several tables from several databases open side by side.
 - **Picks up where you left off.** The plugin remembers the device, port and open tabs. Next time, it reconnects by itself if the same app is running.
 - **Edit the data.** Double-click a cell to change it, right-click it to set it to NULL. **Add Row** inserts a row; columns you leave empty get their default. Select rows and press Delete (or **Delete**) to remove them. Changes go straight into the app's database.
@@ -27,6 +30,9 @@ This plugin does the same job as the Database Inspector, but better. It starts w
   - Your app's screens don't update right away when they watch the data through Room (`Flow`, `LiveData`): they show the change the next time they read, e.g. when you reopen the screen. debug-db writes on its own connection, which Room doesn't notice. Android Studio's Database Inspector does tell Room.
 - **Refresh** a tab to see what your app wrote since.
 - **Your own SQL.** Press **New Query** above the tree to write SQL for the selected database; with a table selected, it starts as `SELECT * FROM` that table. Right-clicking a database or table does the same. Press **Run** (⌘⏎ or Ctrl+Enter); with text selected, only the selection runs.
+
+  ![A query tab: favorites and recent queries on the left, the SQL and its result on the right](docs/screenshots/query.png)
+
   - A `SELECT` (or `WITH … SELECT`) loads 500 rows at a time, and you can sort it by clicking a header, like a table.
   - Several statements separated by `;` run in order, and you see the result of the last one. Paging and sorting run only that last `SELECT` again, never the statements before it.
   - Writes (`UPDATE`, `INSERT`, `DELETE`, …) go straight into the app's database. Query results can't be edited in the grid.
