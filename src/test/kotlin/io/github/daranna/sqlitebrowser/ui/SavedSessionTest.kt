@@ -35,12 +35,31 @@ class SavedSessionTest {
     }
 
     @Test
+    fun `reopens query tabs whose database the app still lists, without asking for its tables`() {
+        val asked = mutableListOf<String>()
+        val saved = listOf(Tab("notes.db", query = "SELECT 1"), Tab("old.db", query = "SELECT 2"))
+
+        val reopened = SavedSession.reopenable(saved, listOf("shop.db", "notes.db")) {
+            asked += it
+            tables.getValue(it)
+        }
+
+        assertEquals(listOf(Tab("notes.db", query = "SELECT 1")), reopened)
+        assertEquals(emptyList<String>(), asked)
+    }
+
+    @Test
     fun `the session survives the XML round trip`() {
         val session = SavedSession.Session().apply {
             serial = "emulator-5554"
             port = 8081
             app = "io.github.daranna.sqlitebrowser.sample"
-            tabs = mutableListOf(Tab("shop.db", "article"), Tab("notes.db", "note"))
+            tabs =
+                mutableListOf(
+                    Tab("shop.db", "article"),
+                    Tab("notes.db", "note"),
+                    Tab("shop.db", query = "SELECT *\n  FROM article -- \"x\" & <y>"),
+                )
             selectedTab = Tab("notes.db", "note")
         }
 

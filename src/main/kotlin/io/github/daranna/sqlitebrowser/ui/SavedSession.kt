@@ -24,7 +24,8 @@ class SavedSession : PersistentStateComponent<SavedSession.Session> {
         var selectedTab: Tab? = null
     }
 
-    data class Tab(var database: String = "", var table: String = "")
+    /** A table tab, or a query tab when [query] holds its SQL. */
+    data class Tab(var database: String = "", var table: String = "", var query: String? = null)
 
     private var session = Session()
 
@@ -36,12 +37,13 @@ class SavedSession : PersistentStateComponent<SavedSession.Session> {
 
     companion object {
         /**
-         * The [saved] tabs the app still has, in their order. [tablesOf] is only asked about
-         * names in [databases], since debug-db dies on any other.
+         * The [saved] tabs the app still has, in their order: query tabs whose database it lists, table tabs whose
+         * table it has. [tablesOf] is only asked about names in [databases], since debug-db dies on any other.
          */
         fun reopenable(saved: List<Tab>, databases: List<String>, tablesOf: (String) -> List<String>): List<Tab> {
-            val tables = saved.map { it.database }.distinct().filter { it in databases }.associateWith { tablesOf(it).toSet() }
-            return saved.filter { tables[it.database]?.contains(it.table) == true }
+            val tables = saved.filter { it.query == null }.map { it.database }.distinct().filter { it in databases }
+                .associateWith { tablesOf(it).toSet() }
+            return saved.filter { if (it.query != null) it.database in databases else tables[it.database]?.contains(it.table) == true }
         }
     }
 }

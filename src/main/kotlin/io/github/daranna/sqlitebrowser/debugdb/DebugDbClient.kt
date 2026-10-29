@@ -103,16 +103,28 @@ class DebugDbClient(private val port: Int) {
         orderBy: Int? = null,
         descending: Boolean = false,
         filters: List<String> = emptyList(),
-    ): TableData {
-        val order = if (orderBy == null) "" else " ORDER BY ${orderBy + 1}" + if (descending) " DESC" else " ASC"
-        return parseTableData(get("query?query=" + encode(select(table, filters, "*", "$order LIMIT $limit OFFSET $offset"))))
-    }
+    ): TableData = query(select(table, filters, "*", "${order(orderBy, descending)} LIMIT $limit OFFSET $offset"))
 
     @Synchronized
-    fun rowCount(table: String, filters: List<String> = emptyList()): Long {
-        val data = parseTableData(get("query?query=" + encode(select(table, filters, "COUNT(*)", ""))))
-        return (data.rows.firstOrNull()?.firstOrNull()?.value as? Number)?.toLong() ?: 0
-    }
+    fun rowCount(table: String, filters: List<String> = emptyList()): Long = count(query(select(table, filters, "COUNT(*)", "")))
+
+    /**
+     * One page of the rows of [select], the [UserSql.select] of what the user typed, in the database last opened with
+     * [tables]. Unlike [tablePage], the result has the query's own column names.
+     *
+     * @param orderBy 0-based column index to sort by, or null for the order [select] gives.
+     */
+    @Synchronized
+    fun selectPage(select: String, offset: Int, limit: Int, orderBy: Int? = null, descending: Boolean = false): TableData =
+        query("SELECT * FROM ($select)${order(orderBy, descending)} LIMIT $limit OFFSET $offset")
+
+    @Synchronized
+    fun selectCount(select: String): Long = count(query("SELECT COUNT(*) FROM ($select)"))
+
+    private fun order(orderBy: Int?, descending: Boolean) =
+        if (orderBy == null) "" else " ORDER BY ${orderBy + 1}" + if (descending) " DESC" else " ASC"
+
+    private fun count(data: TableData) = (data.rows.firstOrNull()?.firstOrNull()?.value as? Number)?.toLong() ?: 0
 
     /**
      * Without filters this is plain `SELECT ... FROM table`. With filters, columns get renamed by position to

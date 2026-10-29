@@ -50,4 +50,20 @@ class TableDataModelTest {
         assertEquals("article_id 🔑", model.getColumnName(0))
         assertEquals("name", model.getColumnName(1))
     }
+
+    @Test
+    fun `sorting a column goes ascending, descending, then off`() {
+        model.toggleSort(1)
+        assertEquals("name ▲", model.getColumnName(1))
+
+        model.toggleSort(1)
+        assertEquals("name ▼", model.getColumnName(1))
+
+        model.toggleSort(1)
+        assertEquals(null, model.sortColumn)
+
+        model.toggleSort(1)
+        model.toggleSort(2)
+        assertEquals(2 to false, model.sortColumn to model.sortDescending)
+    }
 }

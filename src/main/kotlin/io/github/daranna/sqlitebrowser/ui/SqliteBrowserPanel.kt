@@ -28,7 +28,7 @@ import javax.swing.Timer
 
 /**
  * A connection bar on top: device and port until connected, then just the app's name.
- * Below it, the app's databases and tables on the left, and a tab per opened table on the right.
+ * Below it, the app's databases and tables on the left, and a tab per opened table or query on the right.
  *
  * The connection and tabs are kept in [saved]. When the saved device shows up, the panel reconnects
  * if the saved app still answers on the saved port, and reopens the tabs the app still has.
@@ -59,7 +59,11 @@ class SqliteBrowserPanel(parent: Disposable, private val saved: SavedSession.Ses
     private val connectionBar = JPanel(cards)
     private val status = JBLabel()
 
-    private val tree = DatabaseTree(status, ::openTable)
+    private val tree = DatabaseTree(status, ::openTable, ::openQuery)
+    private val newQueryButton = JButton("New Query", AllIcons.General.Add).apply {
+        toolTipText = "Write SQL for the selected database, or the selected table"
+        isEnabled = false
+    }
     private val tabs = JBTabbedPane()
 
     private var client: DebugDbClient? = null
@@ -100,7 +104,10 @@ class SqliteBrowserPanel(parent: Disposable, private val saved: SavedSession.Ses
             add(status, BorderLayout.CENTER)
         }
         val splitter = OnePixelSplitter(false, 0.2f).apply {
-            firstComponent = JBScrollPane(tree.component)
+            firstComponent = JPanel(BorderLayout()).apply {
+                add(JPanel(FlowLayout(FlowLayout.LEFT, 4, 2)).apply { add(newQueryButton) }, BorderLayout.NORTH)
+                add(JBScrollPane(tree.component), BorderLayout.CENTER)
+            }
             secondComponent = tabs
         }
 
@@ -108,12 +115,16 @@ class SqliteBrowserPanel(parent: Disposable, private val saved: SavedSession.Ses
         add(splitter, BorderLayout.CENTER)
 
         connectButton.addActionListener { connect() }
+        newQueryButton.addActionListener {
+            val (database, table) = tree.queryTarget() ?: return@addActionListener run { status.text = "The app has no database to query." }
+            openQuery(database, table)
+        }
         portField.addActionListener { connect() }
         tabs.addMouseListener(object : MouseAdapter() {
             override fun mouseReleased(e: MouseEvent) {
                 if (!SwingUtilities.isMiddleMouseButton(e)) return
                 val index = tabs.indexAtLocation(e.x, e.y)
-                if (index >= 0) closeTab(tabs.getComponentAt(index) as TableView)
+                if (index >= 0) closeTab(tabs.getComponentAt(index) as BrowserTab)
             }
         })
         tabs.addChangeListener { saveTabs() }
@@ -204,9 +215,10 @@ class SqliteBrowserPanel(parent: Disposable, private val saved: SavedSession.Ses
                 saved.port = port
                 saved.app = owner
                 tree.show(newClient, databases)
+                newQueryButton.isEnabled = true
                 if (sameApp) views().forEach { it.client = newClient } else views().forEach(::closeTab)
-                reopen.forEach { openTable(it.database, it.table) }
-                views().firstOrNull { SavedSession.Tab(it.database, it.tableName) == savedSelection }?.let(tabs::setSelectedComponent)
+                reopen.forEach { tab -> tab.query?.let { openQuery(tab.database, sql = it) } ?: openTable(tab.database, tab.table) }
+                views().firstOrNull { it.savedTab() == savedSelection }?.let(tabs::setSelectedComponent)
                 // Drops another app's saved tabs when nothing is open, which no tab change would.
                 saveTabs()
                 appLabel.text = "App: $owner"
@@ -221,33 +233,48 @@ class SqliteBrowserPanel(parent: Disposable, private val saved: SavedSession.Ses
     /** Opens [table] in a new tab, or selects its tab if it is open already. */
     private fun openTable(database: String, table: String) {
         val client = client ?: return
-        views().firstOrNull { it.database == database && it.tableName == table }?.let { return tabs.setSelectedComponent(it) }
-        val view = TableView(database, table, client)
+        views().firstOrNull {
+            it is TableView && it.database == database && it.tableName == table
+        }?.let { return tabs.setSelectedComponent(it) }
+        addTab(TableView(database, table, client))
+    }
+
+    /**
+     * Opens a new query tab on [database], with [sql] in it or else a SELECT of [table]. It doesn't run yet:
+     * saved SQL may hold writes.
+     */
+    private fun openQuery(database: String, table: String? = null, sql: String = table?.let { "SELECT * FROM $it" }.orEmpty()) {
+        val client = client ?: return
+        addTab(QueryView(database, sql, client, ::saveTabs))
+    }
+
+    private fun addTab(view: BrowserTab) {
         Disposer.register(this, view)
-        tabs.addTab(table, view)
+        tabs.addTab(view.title, view)
         val index = tabs.indexOfComponent(view)
-        tabs.setToolTipTextAt(index, "$database › $table")
-        tabs.setTabComponentAt(index, tabHeader(table, view))
+        tabs.setToolTipTextAt(index, view.tooltip)
+        tabs.setTabComponentAt(index, tabHeader(view))
         tabs.selectedIndex = index
     }
 
-    private fun tabHeader(title: String, view: TableView) = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+    private fun tabHeader(view: BrowserTab) = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
         isOpaque = false
-        add(JBLabel(title).apply { border = JBUI.Borders.emptyRight(4) })
+        add(JBLabel(view.title).apply { border = JBUI.Borders.emptyRight(4) })
         add(InplaceButton("Close", AllIcons.Actions.Close) { closeTab(view) })
     }
 
-    private fun closeTab(view: TableView) {
+    private fun closeTab(view: BrowserTab) {
         tabs.remove(view)
         Disposer.dispose(view)
     }
 
+    /** Also called as the user types in a query tab, so the saved SQL stays current. */
     private fun saveTabs() {
-        saved.tabs = views().map { SavedSession.Tab(it.database, it.tableName) }.toMutableList()
-        saved.selectedTab = (tabs.selectedComponent as? TableView)?.let { SavedSession.Tab(it.database, it.tableName) }
+        saved.tabs = views().map { it.savedTab() }.toMutableList()
+        saved.selectedTab = (tabs.selectedComponent as? BrowserTab)?.savedTab()
     }
 
-    private fun views(): List<TableView> = (0 until tabs.tabCount).map { tabs.getComponentAt(it) as TableView }
+    private fun views(): List<BrowserTab> = (0 until tabs.tabCount).map { tabs.getComponentAt(it) as BrowserTab }
 
     override fun dispose() {
         devicePoll.stop()
