@@ -1,6 +1,7 @@
 package io.github.daranna.sqlitebrowser.ui
 
 import com.intellij.icons.AllIcons
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -11,6 +12,7 @@ import com.intellij.openapi.actionSystem.Separator
 import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.actionSystem.ex.ComboBoxAction
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.InputValidator
@@ -38,6 +40,7 @@ import java.awt.Component
 import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.Graphics2D
+import java.awt.datatransfer.StringSelection
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.util.concurrent.atomic.AtomicBoolean
@@ -197,7 +200,12 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
                     )
                 }
             }
-            owner ?: error("No app listens on port $port. Is the debug app running, with debug-db?")
+            if (owner == null) {
+                return@background ui {
+                    status.done()
+                    status.showSetup("No app on $device listens on port $port. Run your app's debug build with the debug-db library added.")
+                }
+            }
             Adb.forward(device.serial, port)
             val newClient = DebugDbClient(port)
             val databases = newClient.databases()
@@ -256,6 +264,8 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
             device != null -> {
                 text.appendText("Not connected")
                 text.appendLine("Connect to $device", SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) { connect(device, saved.port) }
+                text.appendLine("Your app needs the debug-db library.")
+                text.appendLine("How to add it", SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) { BrowserUtil.browse(SETUP_GUIDE) }
             }
 
             devicesError != null -> text.appendText("Can't list devices").appendLine(devicesError!!)
@@ -363,6 +373,19 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
         fun show(kind: EditorNotificationPanel.Status, message: String) {
             val banner = InlineBanner(message, kind).setCloseAction(::hideBanner)
             if (device != null) banner.addAction("Reconnect", ::reconnect)
+            showBanner(banner)
+        }
+
+        /** A warning that the app may lack debug-db, with what to add to it. */
+        fun showSetup(message: String) {
+            val banner = InlineBanner(message, EditorNotificationPanel.Status.Warning).setCloseAction(::hideBanner)
+            banner.addAction("Copy Gradle line") { CopyPasteManager.getInstance().setContents(StringSelection(DEBUG_DB_DEPENDENCY)) }
+            banner.addAction("Setup guide") { BrowserUtil.browse(SETUP_GUIDE) }
+            if (device != null) banner.addAction("Reconnect", ::reconnect)
+            showBanner(banner)
+        }
+
+        private fun showBanner(banner: InlineBanner) {
             bannerHolder.removeAll()
             bannerHolder.add(banner)
             bannerHolder.revalidate()
@@ -479,6 +502,12 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
         private const val DEVICE_POLL_MS = 2000
         private const val DOT_SIZE = 8
         private const val ICON_SIZE = 16
+
+        // People install the plugin without reading that their app needs debug-db, so the panel tells them.
+        private const val DEBUG_DB_DEPENDENCY =
+            "debugImplementation(\"com.github.amitshekhariitbhu.Android-Debug-Database:debug-db:1.0.7\")"
+        private const val SETUP_GUIDE =
+            "https://github.com/DarAnna/android-studio-sqlite-browser#1-add-debug-db-to-your-app"
         private val CONNECTED_DOT = DotIcon(JBColor(0x369650, 0x5FAD65))
         private val DISCONNECTED_DOT = DotIcon(JBColor(0xA8ADBD, 0x6F737A))
 

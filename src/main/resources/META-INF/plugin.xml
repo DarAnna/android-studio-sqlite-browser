@@ -4,8 +4,18 @@
     <vendor url="https://github.com/DarAnna/android-studio-sqlite-browser">Anna Darii</vendor>
     <description><![CDATA[
         <p>Browse and edit the SQLite databases of a running Android debug app, live.</p>
-        <p>Talks to the <a href="https://github.com/amitshekhariitbhu/Android-Debug-Database">Android-Debug-Database</a>
-        server inside the app through <code>adb forward</code>.</p>
+        <p><b>Your app needs the <a href="https://github.com/amitshekhariitbhu/Android-Debug-Database">Android-Debug-Database</a>
+        (debug-db) library.</b> The plugin shows nothing without it. Add JitPack to <code>settings.gradle.kts</code>:</p>
+        <pre>dependencyResolutionManagement {
+    repositories {
+        maven { setUrl("https://jitpack.io") }
+    }
+}</pre>
+        <p>and debug-db to the app module's <code>build.gradle.kts</code>:</p>
+        <pre>debugImplementation("com.github.amitshekhariitbhu.Android-Debug-Database:debug-db:1.0.7")</pre>
+        <p><code>debugImplementation</code> keeps it out of your release build.
+        Full guide: <a href="https://github.com/DarAnna/android-studio-sqlite-browser#usage">README</a>.</p>
+        <p>The plugin talks to the debug-db server inside the app through <code>adb forward</code>.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
