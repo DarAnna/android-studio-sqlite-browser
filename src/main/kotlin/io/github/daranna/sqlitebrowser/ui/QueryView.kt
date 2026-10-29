@@ -10,8 +10,6 @@ import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
-import com.intellij.ui.InplaceButton
-import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
@@ -69,10 +67,7 @@ class QueryView(
     private val starButton = JButton().apply { isFocusable = false }
 
     /** In place of the saved queries while they are hidden, at the same edge, to bring them back. */
-    private val savedStrip = JPanel(BorderLayout()).apply {
-        border = JBUI.Borders.compound(JBUI.Borders.customLineRight(JBColor.border()), JBUI.Borders.empty(2))
-        add(InplaceButton("Show saved queries", AllIcons.Actions.ListFiles) { setSavedShown(true) }, BorderLayout.NORTH)
-    }
+    private val savedStripe = FoldedStripe(AllIcons.Actions.ListFiles, "Saved queries") { setSavedShown(true) }
     private val savedList = SavedQueryList(app, database, this, onHide = { setSavedShown(false) }, onOpen = ::openSaved)
     private val sides = OnePixelSplitter(false, "sqliteBrowser.savedQueries.proportion", 0.25f)
     private val prevButton = JButton("◀")
@@ -128,7 +123,7 @@ class QueryView(
             firstComponent = top
             secondComponent = results
         }
-        add(savedStrip, BorderLayout.WEST)
+        add(savedStripe, BorderLayout.WEST)
         add(sides, BorderLayout.CENTER)
 
         runButton.addActionListener { runSql() }
@@ -214,7 +209,7 @@ class QueryView(
 
     private fun showSaved() {
         savedList.component.isVisible = savedShown
-        savedStrip.isVisible = !savedShown
+        savedStripe.isVisible = !savedShown
         revalidate()
     }
 
