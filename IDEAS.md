@@ -66,3 +66,13 @@ The risks:
 - **A possible clash.** Reusing Google's agent may clash with the Database Inspector, since each inspector ID attaches to an app only once.
 
 Plan: keep debug-db as the base, and build a small prototype on a branch to measure both problems first.
+
+## 4. Room integration: open from an entity file
+
+In an `@Entity` class, a gutter icon or an editor action opens that entity's table in the browser, so there's no hunting through the tree.
+
+Things to settle:
+- Table name: `@Entity(tableName = …)` if set, else the class name. Read it with UAST so Kotlin and Java both work.
+- Which database: the entity is listed in a `@Database(entities = […])` class, but the file name only appears in `Room.databaseBuilder(…, "name.db")`, which may be built at runtime. Simpler: ask the connected app which of its databases has that table, and offer a choice when several do. Remember that `databases()` comes before `tables()`, and only names it returned may be passed.
+- Not connected: open the panel and connect first, or show a hint instead of the icon doing nothing.
+- Maybe also: a `@Query` in a `@Dao` opens in a query tab with its SQL, with `:param` placeholders left for the user to fill in.
