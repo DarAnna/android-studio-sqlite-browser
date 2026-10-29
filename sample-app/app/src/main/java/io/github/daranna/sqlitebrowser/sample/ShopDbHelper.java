@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 
 /**
- * shop.db: a small table and a huge one.
+ * shop.db: a small table, a huge one, and one that refers to the small one.
  *
  * <p>{@code article} has a column {@code article_id} that contains the table name. debug-db's
  * {@code query} endpoint replaces every occurrence of the table name in the SQL with
@@ -15,6 +15,9 @@ import android.database.sqlite.SQLiteStatement;
  *
  * <p>{@code big_table} holds about 150 MB of text, so debug-db's {@code getAllDataFromTheTable}
  * runs the app out of memory.
+ *
+ * <p>{@code purchase.article_id} is a foreign key to {@code article}, declared without a column, so
+ * it refers to article's primary key. Every tenth purchase has NULL there.
  */
 final class ShopDbHelper extends SQLiteOpenHelper {
 
@@ -22,9 +25,10 @@ final class ShopDbHelper extends SQLiteOpenHelper {
     static final int ARTICLE_ROWS = 50;
     static final int BIG_TABLE_ROWS = 150_000;
     static final int PAYLOAD_LENGTH = 1000;
+    static final int PURCHASE_ROWS = 30;
 
     ShopDbHelper(Context context) {
-        super(context, NAME, null, 1);
+        super(context, NAME, null, 2);
         // Lets debug-db read the old state while the seeding transaction runs, instead of
         // failing with "database is locked".
         setWriteAheadLoggingEnabled(true);
@@ -34,20 +38,31 @@ final class ShopDbHelper extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE article (article_id INTEGER PRIMARY KEY, name TEXT, price REAL, note TEXT NULL)");
         db.execSQL("CREATE TABLE big_table (id INTEGER PRIMARY KEY, payload TEXT)");
+        createPurchase(db);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion < 2) {
+            createPurchase(db);
+        }
     }
 
-    /** Fills both tables in one transaction, unless big_table already has its rows. */
+    private static void createPurchase(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE purchase (purchase_id INTEGER PRIMARY KEY,"
+                + " article_id INTEGER REFERENCES article, quantity INTEGER)");
+    }
+
+    /** Fills the tables in one transaction, unless big_table and purchase already have their rows. */
     boolean seedIfEmpty() {
         SQLiteDatabase db = getWritableDatabase();
-        if (DatabaseUtils.queryNumEntries(db, "big_table") == BIG_TABLE_ROWS) {
+        if (DatabaseUtils.queryNumEntries(db, "big_table") == BIG_TABLE_ROWS
+                && DatabaseUtils.queryNumEntries(db, "purchase") == PURCHASE_ROWS) {
             return false;
         }
         db.beginTransaction();
         try {
+            db.execSQL("DELETE FROM purchase");
             db.execSQL("DELETE FROM article");
             db.execSQL("DELETE FROM big_table");
 
@@ -64,6 +79,19 @@ final class ShopDbHelper extends SQLiteOpenHelper {
                     article.bindString(4, "note " + i);
                 }
                 article.executeInsert();
+            }
+
+            SQLiteStatement purchase = db.compileStatement(
+                    "INSERT INTO purchase (purchase_id, article_id, quantity) VALUES (?, ?, ?)");
+            for (int i = 1; i <= PURCHASE_ROWS; i++) {
+                purchase.bindLong(1, i);
+                if (i % 10 == 0) {
+                    purchase.bindNull(2);
+                } else {
+                    purchase.bindLong(2, (i * 7) % ARTICLE_ROWS + 1);
+                }
+                purchase.bindLong(3, i % 4 + 1);
+                purchase.executeInsert();
             }
 
             String filler = filler();

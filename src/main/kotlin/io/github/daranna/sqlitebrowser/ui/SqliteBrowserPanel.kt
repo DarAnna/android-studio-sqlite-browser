@@ -86,6 +86,9 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
     private val content = JPanel(contentCards)
 
     private var client: DebugDbClient? = null
+
+    /** A tab opened by following a foreign key, to the tab it was followed from. */
+    private val openedFrom = mutableMapOf<BrowserTab, BrowserTab>()
     private var connection: Connection? = null
 
     /** Whether to reconnect to the saved app once its device is listed. Only tried once. */
@@ -265,11 +268,28 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
 
     /** Opens [table] in a new tab, or selects its tab if it is open already. */
     private fun openTable(database: String, table: String) {
-        val client = client ?: return
         views().firstOrNull {
             it is TableView && it.database == database && it.tableName == table
         }?.let { return tabs.setSelectedComponent(it) }
-        addTab(TableView(database, table, client))
+        tableView(database, table)?.let(::addTab)
+    }
+
+    private fun tableView(database: String, table: String): TableView? {
+        val client = client ?: return null
+        lateinit var view: TableView
+        view = TableView(database, table, client) { key, value -> followForeignKey(view, key, value) }
+        return view
+    }
+
+    /**
+     * Opens the rows [key] leads to from [from] in a new tab, even when the table is open already, so the filters there
+     * stay as they are. Closing the new tab goes back to [from].
+     */
+    private fun followForeignKey(from: TableView, key: DebugDbClient.ForeignKey, value: Any) {
+        val view = tableView(from.database, key.targetTable) ?: return
+        openedFrom[view] = from
+        addTab(view)
+        view.filterBy(key.targetColumn, value)
     }
 
     /**
@@ -302,7 +322,10 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
     }
 
     private fun closeTab(view: BrowserTab) {
+        val back = openedFrom.remove(view)?.takeIf { tabs.indexOfComponent(it) >= 0 }
+        openedFrom.values.removeAll { it == view }
         tabs.remove(view)
+        back?.let { tabs.setSelectedComponent(it) }
         Disposer.dispose(view)
         showContent()
     }

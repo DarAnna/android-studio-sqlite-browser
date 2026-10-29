@@ -12,6 +12,8 @@ long that took:
     table-name rewrite in `query` (`ORDER BY article_id` becomes `ORDER BY [article]_id`).
   - `big_table`: 150,000 rows of about 1,000 characters each. `getAllDataFromTheTable` on it runs
     the app out of memory, so the plugin must page through `query` instead.
+  - `purchase`: 30 rows. `article_id` is a foreign key to `article` (every tenth is NULL), to
+    follow from a cell to the article it names.
 - `settings.db`
   - `flag`: 4 rows, so more than one database shows up.
 

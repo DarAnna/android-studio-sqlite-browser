@@ -1,11 +1,14 @@
 package io.github.daranna.sqlitebrowser.ui
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.ui.ColoredTableCellRenderer
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.table.JBTable
+import com.intellij.util.ui.JBUI
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 import java.awt.BorderLayout
+import java.awt.Point
 import javax.swing.JPanel
 import javax.swing.JTable
 
@@ -44,9 +47,27 @@ internal fun showKeepingWidths(table: JBTable, data: DebugDbClient.TableData) {
     }
 }
 
-/** Shows NULL as a grey "NULL", so it can't be mistaken for an empty string. */
-internal class NullAwareRenderer : ColoredTableCellRenderer() {
+/**
+ * Shows NULL as a grey "NULL", so it can't be mistaken for an empty string.
+ *
+ * [link] gives the tooltip of a cell that leads elsewhere, such as along a foreign key, by model row and column; such
+ * cells get [LINK_ICON] at their left edge (see [isOnLink]).
+ */
+internal class NullAwareRenderer(private val link: (row: Int, column: Int) -> String? = { _, _ -> null }) : ColoredTableCellRenderer() {
     override fun customizeCellRenderer(table: JTable, value: Any?, selected: Boolean, hasFocus: Boolean, row: Int, column: Int) {
         if (value == null) append("NULL", SimpleTextAttributes.GRAYED_ATTRIBUTES) else append(value.toString())
+        val tooltip = link(table.convertRowIndexToModel(row), table.convertColumnIndexToModel(column))
+        if (tooltip != null) icon = LINK_ICON
+        toolTipText = tooltip
     }
+}
+
+internal val LINK_ICON = AllIcons.Ide.External_link_arrow
+
+/** Whether [point] in [table] is on the icon that [NullAwareRenderer] draws in a linked cell. */
+internal fun isOnLink(table: JTable, point: Point): Boolean {
+    val row = table.rowAtPoint(point)
+    val column = table.columnAtPoint(point)
+    if (row < 0 || column < 0) return false
+    return point.x - table.getCellRect(row, column, false).x < LINK_ICON.iconWidth + JBUI.scale(6)
 }

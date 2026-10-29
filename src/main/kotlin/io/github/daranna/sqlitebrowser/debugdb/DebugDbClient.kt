@@ -176,6 +176,27 @@ class DebugDbClient(private val port: Int) {
     data class ColumnInfo(val name: String, val type: String, val notNull: Boolean, val keyPosition: Int)
 
     /**
+     * [table]'s single-column foreign keys, from `PRAGMA foreign_key_list`. Composite ones are left out: one cell's
+     * value can't pick their rows.
+     *
+     * A key declared as `REFERENCES other` without a column refers to other's primary key, which is then read from
+     * `PRAGMA table_info`; a key whose target has no single-column primary key is left out too.
+     */
+    @Synchronized
+    fun foreignKeys(table: String): List<ForeignKey> {
+        // Columns: id, seq, table, from, to, on_update, on_delete, match. A composite key has a row per column, one id.
+        val rows = query("PRAGMA foreign_key_list($table)").rows.groupBy { (it[0].value as Number).toInt() }.values
+        return rows.mapNotNull { it.singleOrNull() }.mapNotNull {
+            val target = it[2].value as String
+            val column = it[4].value as? String ?: primaryKey(target).singleOrNull() ?: return@mapNotNull null
+            ForeignKey(it[3].value as String, target, column)
+        }
+    }
+
+    /** [column] holds values of [targetColumn] in [targetTable]. */
+    data class ForeignKey(val column: String, val targetTable: String, val targetColumn: String)
+
+    /**
      * Updates one row. Primary key columns pick the row; the other columns in [row] are set, the rest are left alone.
      */
     @Synchronized

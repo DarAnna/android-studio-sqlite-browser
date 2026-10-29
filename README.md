@@ -16,6 +16,7 @@ This plugin does the same job as the Database Inspector, but better. It starts w
   - Filters in several columns combine: a row must match all of them.
 - **Sort by any column.** Click a header to sort the whole table by it: once ascending, twice descending, a third time back to table order.
 - **Big tables are fine.** Rows load 500 at a time, so a table with hundreds of thousands of rows opens fast and doesn't run your app out of memory.
+- **Follow foreign keys.** A cell of a foreign key column has an arrow: click it (or right-click the cell) to open the table it refers to in a new tab, filtered to the rows with that value, e.g. the article a purchase names. Its filter box holds `=value`; clear it to see the whole table. Close the tab to go back to where you came from. Keys over several columns aren't followed.
 - **Tabs.** All databases and their tables sit in a tree; double-click a table to open it in its own tab. Keep several tables from several databases open side by side.
 - **Picks up where you left off.** The plugin remembers the device, port and open tabs. Next time, it reconnects by itself if the same app is running.
 - **Edit the data.** Double-click a cell to change it, right-click it to set it to NULL. **Add Row** inserts a row; columns you leave empty get their default. Select rows and press Delete (or **Delete**) to remove them. Changes go straight into the app's database.

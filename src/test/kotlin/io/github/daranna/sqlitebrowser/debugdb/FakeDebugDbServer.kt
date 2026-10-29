@@ -18,13 +18,17 @@ class FakeDebugDbServer : AutoCloseable {
     /** Endpoint name (`getDbList`, `query`, ...) to the JSON body it returns. */
     val responses = mutableMapOf<String, String>()
 
+    /** SQL of a `query` request to the JSON body it returns, ahead of [responses], for calls that send several queries. */
+    val queries = mutableMapOf<String, String>()
+
     private val server = HttpServer.create(InetSocketAddress("localhost", 0), 0).apply {
         createContext("/") { exchange ->
             val uri = exchange.requestURI
             val route = uri.rawPath.removePrefix("/") + (uri.rawQuery?.let { "?$it" } ?: "")
             synchronized(requests) { requests += route }
             val endpoint = uri.rawPath.removePrefix("/")
-            val body = responses[endpoint]
+            val sql = if (endpoint == "query") URLDecoder.decode(uri.rawQuery.substringAfter("="), Charsets.UTF_8) else null
+            val body = queries[sql] ?: responses[endpoint]
             if (body == null) {
                 exchange.sendResponseHeaders(500, -1)
             } else {
