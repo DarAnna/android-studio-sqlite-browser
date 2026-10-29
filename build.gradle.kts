@@ -49,6 +49,15 @@ intellijPlatform {
             sinceBuild = "261"
         }
     }
+    // Marketplace secrets come from the environment, never from a file in the repo.
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
     pluginVerification {
         ides {
             create(IntelliJPlatformType.AndroidStudio, providers.gradleProperty("androidStudioVersion").get())

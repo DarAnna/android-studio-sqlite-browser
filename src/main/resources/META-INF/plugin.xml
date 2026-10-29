@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>io.github.daranna.sqlitebrowser</id>
-    <name>SQLite Browser</name>
+    <name>Live SQLite for Android</name>
     <vendor url="https://github.com/DarAnna/android-studio-sqlite-browser">Anna Darii</vendor>
     <description><![CDATA[
         <p>Browse and edit the SQLite databases of a running Android debug app, live.</p>
@@ -17,6 +17,11 @@
         Full guide: <a href="https://github.com/DarAnna/android-studio-sqlite-browser#usage">README</a>.</p>
         <p>The plugin talks to the debug-db server inside the app through <code>adb forward</code>.</p>
     ]]></description>
+
+    <change-notes><![CDATA[
+        <p>0.1.0: first release. Browse tables with paging, sorting and a filter per column, follow foreign keys,
+        edit cells and rows, and run your own SQL with completion, recent queries and favorites.</p>
+    ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
     <!-- The query tab's SQL language and its schema hook (see SqlEditor). -->
