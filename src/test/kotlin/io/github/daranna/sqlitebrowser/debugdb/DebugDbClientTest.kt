@@ -348,6 +348,24 @@ class DebugDbClientTest {
     }
 
     @Test
+    fun `columns reads name, declared type, NOT NULL and key position`() {
+        // A column declared without a type has NULL there.
+        server.responses["query"] =
+            """{"isSuccessful":true,"isEditable":false,"tableInfos":[],"rows":[
+               |[{"dataType":"integer","value":0},{"dataType":"text","value":"id"},{"dataType":"text","value":"INTEGER"},
+               |{"dataType":"integer","value":1},{"dataType":"text","value":null},{"dataType":"integer","value":1}],
+               |[{"dataType":"integer","value":1},{"dataType":"text","value":"note"},{"dataType":"text","value":null},
+               |{"dataType":"integer","value":0},{"dataType":"text","value":null},{"dataType":"integer","value":0}]]}
+            """.trimMargin()
+
+        assertEquals(
+            listOf(DebugDbClient.ColumnInfo("id", "INTEGER", true, 1), DebugDbClient.ColumnInfo("note", "", false, 0)),
+            client.columns("article"),
+        )
+        assertEquals("PRAGMA table_info(article)", server.lastQuerySql())
+    }
+
+    @Test
     fun `updateRow and deleteRow refuse a row without a primary key, which would hit every row`() {
         val row = listOf(DebugDbClient.RowValue("name", false, "text", "x"))
 

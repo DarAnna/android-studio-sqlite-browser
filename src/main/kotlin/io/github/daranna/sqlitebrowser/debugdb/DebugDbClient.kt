@@ -156,12 +156,24 @@ class DebugDbClient(private val port: Int) {
      * Edits need this rather than [Column.isPrimaryKey]: debug-db marks only the first column of a composite key,
      * and its edit calls pick the row by the marked columns alone.
      */
+    fun primaryKey(table: String): List<String> = columns(table)
+        .filter { it.keyPosition > 0 }
+        .sortedBy { it.keyPosition }
+        .map { it.name }
+
+    /** [table]'s columns from `PRAGMA table_info`, in table order. */
     @Synchronized
-    fun primaryKey(table: String): List<String> = query("PRAGMA table_info($table)").rows
-        .map { (it[5].value as Number).toInt() to it[1].value as String }
-        .filter { (position, _) -> position > 0 }
-        .sortedBy { (position, _) -> position }
-        .map { (_, name) -> name }
+    fun columns(table: String): List<ColumnInfo> = query("PRAGMA table_info($table)").rows.map {
+        ColumnInfo(
+            name = it[1].value as String,
+            type = it[2].value as? String ?: "",
+            notNull = (it[3].value as Number).toInt() != 0,
+            keyPosition = (it[5].value as Number).toInt(),
+        )
+    }
+
+    /** A column as declared; [keyPosition] is its 1-based place in the primary key, or 0 when it is not in it. */
+    data class ColumnInfo(val name: String, val type: String, val notNull: Boolean, val keyPosition: Int)
 
     /**
      * Updates one row. Primary key columns pick the row; the other columns in [row] are set, the rest are left alone.

@@ -5,7 +5,6 @@ import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.SimpleTextAttributes
-import com.intellij.ui.components.JBLabel
 import com.intellij.ui.treeStructure.Tree
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 import java.awt.event.KeyAdapter
@@ -24,7 +23,7 @@ import javax.swing.tree.DefaultTreeModel
  * Add [component] to the UI.
  */
 class DatabaseTree(
-    private val status: JBLabel,
+    private val status: Status,
     private val onOpen: (database: String, table: String) -> Unit,
     private val onQuery: (database: String, table: String?) -> Unit,
 ) {
@@ -132,7 +131,7 @@ class DatabaseTree(
                 tables.forEach { node.add(DefaultMutableTreeNode(TableItem(database, it))) }
                 if (tables.isEmpty()) node.add(DefaultMutableTreeNode(Message("No tables")))
                 treeModel.nodeStructureChanged(node)
-                status.text = ""
+                status.done()
             }
         }
     }

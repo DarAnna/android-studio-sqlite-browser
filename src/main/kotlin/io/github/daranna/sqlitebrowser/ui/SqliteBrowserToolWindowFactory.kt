@@ -12,7 +12,7 @@ class SqliteBrowserToolWindowFactory :
     DumbAware {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = SqliteBrowserPanel(toolWindow.disposable, project.service<SavedSession>().state)
+        val panel = SqliteBrowserPanel(project, toolWindow.disposable, project.service<SavedSession>().state)
         val content = ContentFactory.getInstance().createContent(panel, null, false)
         toolWindow.contentManager.addContent(content)
     }
