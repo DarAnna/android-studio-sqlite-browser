@@ -245,6 +245,20 @@ check_article_edit() {
         && "$row" == "integer:$id,text:e2e,real:2.5,text:null" && "$n" == "$ARTICLE_ROWS" ]]
 }
 
+check_purchase_foreign_key() {
+    # DebugDbClient.foreignKeys: PRAGMA through query. purchase names article without a column, so "to" is null and
+    # the key is article's primary key. Then TableView.filterBy on article: "=8" on article_id, by position alias.
+    local fk n_key target
+    get "getTableList?database=shop.db" >/dev/null
+    fk="$(query "PRAGMA foreign_key_list(purchase)" \
+        | jq -r '.rows[] | [.[2].value, .[3].value, (.[4].value | tostring)] | join(",")')"
+    n_key="$(query "PRAGMA table_info(article)" | jq -r '[.rows[] | select(.[5].value > 0) | .[1].value] | join(",")')"
+    local renamed="SELECT 0 AS c0, 0 AS c1, 0 AS c2, 0 AS c3 WHERE 0 UNION ALL SELECT * FROM article"
+    target="$(query "SELECT * FROM ($renamed) WHERE c0 IN (8, '8') LIMIT 500 OFFSET 0" | jq -r '[.rows[][1].value] | join(",")')"
+    echo "foreign key=$fk article key=$n_key target=$target"
+    [[ "$fk" == "article,article_id,null" && "$n_key" == article_id && "$target" == "Article 8" ]]
+}
+
 check_user_query() {
     # A query tab's SQL after UserSql: each table name glued to its keyword in quotes, so debug-db finds no table.
     # Then it rewrites nothing, so article_id survives, and names the columns after the query's own.
@@ -285,6 +299,7 @@ check "article sorted by name hits the table-name rewrite" check_article_name_so
 check "article filtered by column, as the plugin filters" check_article_filter
 check "article primary key from PRAGMA table_info" check_article_primary_key
 check "article row added, updated and deleted, as the plugin edits" check_article_edit
+check "purchase foreign key to article, followed as the plugin follows it" check_purchase_foreign_key
 check "user SQL with the table name hidden from debug-db" check_user_query
 check "settings.db flag table readable" check_settings_db
 check "app process still alive" check_app_alive

@@ -366,6 +366,46 @@ class DebugDbClientTest {
     }
 
     @Test
+    fun `foreignKeys reads single-column keys from PRAGMA foreign_key_list`() {
+        // Rows: id, seq, table, from, to, on_update, on_delete, match. Key 1 spans two columns, so it's left out.
+        server.queries["PRAGMA foreign_key_list(purchase)"] =
+            """{"isSuccessful":true,"isEditable":false,"tableInfos":[],"rows":[
+               |${fkRow(0, 0, "article", "article_id", "article_id")},
+               |${fkRow(1, 0, "pair", "pa", "a")},${fkRow(1, 1, "pair", "pb", "b")},
+               |${fkRow(2, 0, "customer", "buyer", null)}]}
+            """.trimMargin()
+        // customer is referenced without a column, so the key is customer's primary key.
+        server.queries["PRAGMA table_info(customer)"] =
+            """{"isSuccessful":true,"isEditable":false,"tableInfos":[],"rows":[
+               |[{"dataType":"integer","value":0},{"dataType":"text","value":"customer_id"},{"dataType":"text","value":"INTEGER"},
+               |{"dataType":"integer","value":0},{"dataType":"text","value":null},{"dataType":"integer","value":1}]]}
+            """.trimMargin()
+
+        assertEquals(
+            listOf(
+                DebugDbClient.ForeignKey("article_id", "article", "article_id"),
+                DebugDbClient.ForeignKey("buyer", "customer", "customer_id"),
+            ),
+            client.foreignKeys("purchase"),
+        )
+    }
+
+    @Test
+    fun `foreignKeys leaves out a key to a table without a single-column primary key`() {
+        server.queries["PRAGMA foreign_key_list(purchase)"] =
+            """{"isSuccessful":true,"isEditable":false,"tableInfos":[],"rows":[${fkRow(0, 0, "keyless", "k", null)}]}"""
+        server.queries["PRAGMA table_info(keyless)"] = """{"isSuccessful":true,"isEditable":false,"tableInfos":[],"rows":[]}"""
+
+        assertEquals(emptyList<DebugDbClient.ForeignKey>(), client.foreignKeys("purchase"))
+    }
+
+    private fun fkRow(id: Int, seq: Int, table: String, from: String, to: String?) =
+        """[{"dataType":"integer","value":$id},{"dataType":"integer","value":$seq},{"dataType":"text","value":"$table"},
+           |{"dataType":"text","value":"$from"},{"dataType":"text","value":${to?.let { "\"$it\"" }}},
+           |{"dataType":"text","value":"NO ACTION"},{"dataType":"text","value":"NO ACTION"},{"dataType":"text","value":"NONE"}]
+        """.trimMargin()
+
+    @Test
     fun `updateRow and deleteRow refuse a row without a primary key, which would hit every row`() {
         val row = listOf(DebugDbClient.RowValue("name", false, "text", "x"))
 

@@ -6,9 +6,12 @@ Unscheduled feature ideas. Nothing here is committed to.
 
 None queued.
 
+Later: the other way along a foreign key, from a row to the rows that refer to it (an article's purchases). Needs every table's `PRAGMA foreign_key_list`, not just the open one's.
+
 Later: editing in query results. A free-form result has no single table or primary keys, so this probably only works for a plain `SELECT * FROM t …`.
 
 Done:
+- Following a foreign key from the table view. `DebugDbClient.foreignKeys` reads `PRAGMA foreign_key_list` (it passes through `query`) once per table, single-column keys only; a key without a column (`REFERENCES article`) means the target's primary key. A cell gets an arrow icon; a click opens the target table in a new tab, even when it is open already so that tab's filters stay, and `TableView.filterBy` sets `=value` in the target column's filter, which already keeps to the table name rule. That shows every matching row, which for a key into a primary key is the one row. Closing that tab selects the one it was followed from. The sample app's `purchase` table refers to `article`.
 - Tabs, a database tree and a compact connection bar ([#2](https://github.com/DarAnna/android-studio-sqlite-browser/pull/2)). Tabs load through `DebugDbClient.withDatabase`, which reopens their database when another tab switched it.
 - Device, port and open tabs kept across IDE restarts (`SavedSession`, in the workspace file). On start the panel reconnects only if the same app answers on the saved port, and reopens only tabs whose database and table the app still has.
 - Editing in the table view: edit a cell, set it to NULL, add a row, delete rows. Only tables with a single-column primary key can have rows edited or deleted, since debug-db picks the row by the first key column alone; the key comes from `PRAGMA table_info`.
@@ -29,17 +32,7 @@ Things to settle:
 - Read-only: refuse anything but `SELECT`.
 - Run the generated SQL through the query tab's `UserSql`, which takes care of the table name rule.
 
-## 2. Follow a foreign key
-
-When a column is a foreign key, show a button in the cell that opens all rows of the referenced table filtered by that value.
-
-Things to settle:
-- Detecting foreign keys: `PRAGMA foreign_key_list(table)` through `query`, once per table when it loads. Check that debug-db's `query` endpoint passes PRAGMA through.
-- Which rows to show: the single referenced row, or every row in the other table that matches the value. The latter is what was asked for; both could be offered.
-- Navigation: open in the same table view with a filter and a way back, or in a new tab. Tabs exist now (`openTable` in `SqliteBrowserPanel`), so a new tab with the filter already set is the cheaper option. The existing `ColumnFilter` work may already cover the filter part.
-- The `WHERE` clause must respect the table name rule: the referenced table's name must appear only once in the SQL.
-
-## 3. App Inspection instead of debug-db
+## 2. App Inspection instead of debug-db
 
 Once the plugin works well on debug-db, try building it on Android Studio's App Inspection, the framework behind the Database Inspector. Then apps would need no extra library and no setup, and the plugin would see live data on the app's own connection, Room and WAL included.
 
@@ -54,7 +47,7 @@ The risks:
 
 Plan: keep debug-db as the base, and build a small prototype on a branch to measure both problems first.
 
-## 4. Room integration: open from an entity file
+## 3. Room integration: open from an entity file
 
 In an `@Entity` class, a gutter icon or an editor action opens that entity's table in the browser, so there's no hunting through the tree.
 

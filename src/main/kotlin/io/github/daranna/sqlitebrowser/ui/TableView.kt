@@ -8,33 +8,44 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
+import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient.ForeignKey
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient.RowValue
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbException
 import java.awt.BorderLayout
+import java.awt.Cursor
 import java.awt.FlowLayout
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import java.awt.event.MouseMotionAdapter
 import javax.swing.AbstractAction
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.KeyStroke
+import javax.swing.SwingUtilities
 import javax.swing.Timer
 
 /**
  * One table of one database, a page at a time, with sorting, a filter per column and editing. The content of a tab.
  *
  * Every load reopens [database] on the server if another tab switched it, through [DebugDbClient.withDatabase].
+ * A click on the icon in a foreign key's cell calls [follow] with the key and the cell's value.
  */
-class TableView(override val database: String, val tableName: String, client: DebugDbClient) : BrowserTab() {
+class TableView(
+    override val database: String,
+    val tableName: String,
+    client: DebugDbClient,
+    private val follow: (key: ForeignKey, value: Any) -> Unit = { _, _ -> },
+) : BrowserTab() {
 
     override var client: DebugDbClient = client
         set(value) {
             field = value
             primaryKey = null
+            foreignKeys = null
             loadPage()
         }
 
@@ -60,7 +71,10 @@ class TableView(override val database: String, val tableName: String, client: De
         autoResizeMode = JBTable.AUTO_RESIZE_OFF
         // Stops editing when the user clicks elsewhere, e.g. on Refresh, instead of keeping the editor open.
         putClientProperty("terminateEditOnFocusLost", true)
-        setDefaultRenderer(Any::class.java, NullAwareRenderer())
+        setDefaultRenderer(
+            Any::class.java,
+            NullAwareRenderer { row, column -> link(row, column)?.let { linkText(it, row, column) } },
+        )
     }
     private val filterRow = ColumnFilterRow(table, ::filtersEdited)
     private val columnHeader: JPanel = JPanel(BorderLayout()).apply {
@@ -86,6 +100,12 @@ class TableView(override val database: String, val tableName: String, client: De
 
     /** The table's primary key columns, asked once per client when the table turns out editable; null until then. */
     private var primaryKey: List<String>? = null
+
+    /** The table's foreign keys, asked once per client; null until then. */
+    private var foreignKeys: List<ForeignKey>? = null
+
+    /** A filter [filterBy] got before the first page told it the columns: the column's name and the value. */
+    private var pendingFilter: Pair<String, Any>? = null
 
     init {
         val bottom = JPanel(BorderLayout()).apply {
@@ -123,6 +143,23 @@ class TableView(override val database: String, val tableName: String, client: De
             override fun mousePressed(e: MouseEvent) = maybeShowPopup(e)
 
             override fun mouseReleased(e: MouseEvent) = maybeShowPopup(e)
+
+            override fun mouseClicked(e: MouseEvent) {
+                if (!SwingUtilities.isLeftMouseButton(e) || e.clickCount != 1 || !isOnLink(table, e.point)) return
+                followLink(
+                    table.convertRowIndexToModel(table.rowAtPoint(e.point)),
+                    table.convertColumnIndexToModel(table.columnAtPoint(e.point)),
+                )
+            }
+        })
+        table.addMouseMotionListener(object : MouseMotionAdapter() {
+            override fun mouseMoved(e: MouseEvent) {
+                val row = table.rowAtPoint(e.point)
+                val column = table.columnAtPoint(e.point)
+                val onLink = row >= 0 && column >= 0 && isOnLink(table, e.point) &&
+                    link(table.convertRowIndexToModel(row), table.convertColumnIndexToModel(column)) != null
+                table.cursor = if (onLink) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) else null
+            }
         })
         prevButton.addActionListener {
             offset = maxOf(0, offset - PAGE_SIZE)
@@ -161,18 +198,26 @@ class TableView(override val database: String, val tableName: String, client: De
         val filters = filters
         val filtered = filters.any { it.isNotBlank() }
         val askKey = primaryKey == null
+        val askForeignKeys = foreignKeys == null
         val seq = ++loadSeq
         background(status, "Loading $tableName") {
-            val (count, page, key) = client.withDatabase(database) {
+            val loaded = client.withDatabase(database) {
                 val count = rowCount(tableName, filters)
                 val page = tablePage(tableName, offset, PAGE_SIZE, sortColumn, descending, filters)
-                Triple(count, page, if (askKey && !filtered && page.editable) primaryKey(tableName) else null)
+                Loaded(
+                    count,
+                    page,
+                    if (askKey && !filtered && page.editable) primaryKey(tableName) else null,
+                    if (askForeignKeys) foreignKeys(tableName) else null,
+                )
             }
+            val (count, page, key, foreignKeys) = loaded
             ui {
                 if (seq != loadSeq) return@ui
                 // A filtered answer names its columns c0, c1, ...; the real ones come from the unfiltered page.
                 val data = if (filtered) page.copy(columns = model.data.columns, editable = model.data.editable) else page
                 if (key != null) primaryKey = key
+                if (foreignKeys != null) this.foreignKeys = foreignKeys
                 totalRows = count
                 model.keyColumn = keyColumn(data)
                 showKeepingWidths(table, data)
@@ -185,8 +230,53 @@ class TableView(override val database: String, val tableName: String, client: De
                     model.keyColumn == null -> status.text += " (no single-column primary key, so rows can only be added)"
                 }
                 updateEditButtons()
+                pendingFilter?.let { (column, value) -> filterBy(column, value) }
             }
         }
+    }
+
+    private data class Loaded(
+        val count: Long,
+        val page: DebugDbClient.TableData,
+        val primaryKey: List<String>?,
+        val foreignKeys: List<ForeignKey>?,
+    )
+
+    /**
+     * Shows only the rows whose [column] holds [value], in place of any other filter: `=value` in its filter box,
+     * which matches 5 and '5' alike, since a foreign key may hold either.
+     */
+    fun filterBy(column: String, value: Any) {
+        if (model.data.columns.isEmpty()) {
+            pendingFilter = column to value
+            return
+        }
+        pendingFilter = null
+        val index = model.data.columns.indexOfFirst { it.name == column }
+        if (index < 0) {
+            status.text = "$tableName has no column $column"
+            return
+        }
+        filters = List(model.data.columns.size) { if (it == index) "=$value" else "" }
+        filterRow.show(filters)
+        offset = 0
+        loadPage()
+    }
+
+    /** The foreign key that [column] of [row] leads along, or null when it leads nowhere, such as for NULL. */
+    private fun link(row: Int, column: Int): ForeignKey? {
+        val name = model.data.columns.getOrNull(column)?.name ?: return null
+        val value = model.getValueAt(row, column)
+        if (value == null || value.toString().isBlank()) return null
+        return foreignKeys?.firstOrNull { it.column == name }
+    }
+
+    private fun linkText(key: ForeignKey, row: Int, column: Int) =
+        "Open ${key.targetTable} where ${key.targetColumn} = ${model.getValueAt(row, column)}"
+
+    private fun followLink(row: Int, column: Int) {
+        val key = link(row, column) ?: return
+        follow(key, model.getValueAt(row, column)!!)
     }
 
     /**
@@ -256,6 +346,14 @@ class TableView(override val database: String, val tableName: String, client: De
         val modelRow = table.convertRowIndexToModel(row)
         val modelColumn = table.convertColumnIndexToModel(column)
         JBPopupMenu().apply {
+            link(modelRow, modelColumn)?.let { key ->
+                add(
+                    JBMenuItem(linkText(key, modelRow, modelColumn), LINK_ICON).apply {
+                        addActionListener { followLink(modelRow, modelColumn) }
+                    },
+                )
+                addSeparator()
+            }
             add(
                 JBMenuItem("Set to NULL").apply {
                     isEnabled =
