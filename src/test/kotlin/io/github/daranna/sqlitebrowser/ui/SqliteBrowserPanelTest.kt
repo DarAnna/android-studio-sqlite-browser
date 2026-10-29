@@ -12,7 +12,7 @@ class SqliteBrowserPanelTest {
 
     @Test
     fun `short name keeps the part before a build variant`() {
-        assertEquals("speedy.debug", SqliteBrowserPanel.shortName("com.example.speedy.debug"))
+        assertEquals("shop.debug", SqliteBrowserPanel.shortName("com.example.shop.debug"))
     }
 
     @Test

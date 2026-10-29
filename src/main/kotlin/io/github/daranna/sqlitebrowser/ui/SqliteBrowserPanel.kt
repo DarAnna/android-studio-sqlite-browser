@@ -511,7 +511,7 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
         private val CONNECTED_DOT = DotIcon(JBColor(0x369650, 0x5FAD65))
         private val DISCONNECTED_DOT = DotIcon(JBColor(0xA8ADBD, 0x6F737A))
 
-        /** Build variants that end a package name but don't name the app, as in `com.speedy.debug`. */
+        /** Build variants that end a package name but don't name the app, as in `com.example.shop.debug`. */
         private val VARIANT_SUFFIXES = setOf("debug", "dev", "staging", "qa", "internal", "beta")
 
         /** The package's last part, or the last two when the last is a build variant. */

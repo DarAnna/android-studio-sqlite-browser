@@ -1,12 +1,12 @@
-# SQLite Browser for Android Studio
+# Live SQLite for Android
 
-Look at your debug app's SQLite databases, live, but I fixed everything that annoyed me about Database Inspector.
+Browse and edit your debug app's SQLite databases, live, in a tool window in Android Studio.
 
 ![The article table filtered to prices over 50 and sorted by price, next to the tree of databases and tables](docs/screenshots/filter-and-sort.png)
 
 ## Why
 
-This plugin does the same job as the App Inspection's Database Inspector plus more features:
+This plugin does the same job as the App Inspection's Database Inspector plus more features (a filter box under every column, foreign keys you can follow to the rows they reference and favorite queries per database)
 
 ## Features
 
@@ -27,7 +27,7 @@ This plugin does the same job as the App Inspection's Database Inspector plus mo
   - The key itself can't be changed.
   - Typing the text `null` stores NULL: debug-db can't tell them apart.
   - NULL shows as a grey `NULL`, so it doesn't look like an empty string.
-  - Your app's screens don't update right away when they watch the data through Room (`Flow`, `LiveData`): they show the change the next time they read, e.g. when you reopen the screen. debug-db writes on its own connection, which Room doesn't notice. Android Studio's Database Inspector does tell Room.
+  - Your app's screens may not show the change right away: see [Limitations](#limitations).
 - **Refresh** a tab to see what your app wrote since.
 - **Your own SQL.** Press **New Query** above the tree to write SQL for the selected database; with a table selected, it starts as `SELECT * FROM` that table. Right-clicking a database or table does the same. Press **Run** (⌘⏎ or Ctrl+Enter); with text selected, only the selection runs.
 
@@ -35,12 +35,18 @@ This plugin does the same job as the App Inspection's Database Inspector plus mo
 
   - A `SELECT` (or `WITH … SELECT`) loads 500 rows at a time, and you can sort it by clicking a header, like a table.
   - Several statements separated by `;` run in order, and you see the result of the last one. Paging and sorting run only that last `SELECT` again, never the statements before it.
-  - Writes (`UPDATE`, `INSERT`, `DELETE`, …) go straight into the app's database. Query results can't be edited in the grid.
+  - Writes (`UPDATE`, `INSERT`, `DELETE`, …) go straight into the app's database, but Room doesn't notice them: see [Limitations](#limitations). Query results can't be edited in the grid.
   - The SQL is kept when you restart Android Studio, but it doesn't run until you press **Run**.
   - **New Query** on a database starts with the SQL you last ran there, even after you closed its tab. On a table, it starts with `SELECT * FROM` that table.
   - The list beside the editor shows the database's **Favorites** and its 20 most **Recent** queries. Click one to open it: a query that only reads (`SELECT`, `PRAGMA table_info(…)`, …) runs right away; one that may change data waits for **Run**. It replaces the editor's SQL when that is empty or saved too, and otherwise opens in a new tab. The list button next to **Run** hides the list in all tabs.
   - The ☆ next to **Run** adds the editor's SQL to Favorites, named after its first line, and removes it again. Right-click a favorite (or press F2) to rename it, or a recent query to add it to Favorites. Favorites and recent queries are kept per app and database, in all your projects.
   - The editor highlights SQL and completes keywords and the database's table and column names (Ctrl+Space). It learns the names when the tab opens, on reconnect, and after you run `CREATE`, `DROP` or `ALTER`.
+
+## Limitations
+
+**Room doesn't see your edits right away.** When you change data in the plugin (editing a cell, adding or deleting rows, or running `UPDATE`, `INSERT` or `DELETE` in a query tab), screens that watch the data through Room (`Flow`, `LiveData`, `PagingSource`) don't update. They show the change the next time they query the database, for example when you reopen the screen or restart the app.
+
+Room learns about changes from triggers that only fire for writes on its own connection, and debug-db writes on a separate one. Android Studio's Database Inspector tells Room after each change, so its edits show up right away.
 
 ## Usage
 
@@ -99,6 +105,6 @@ Then connect on 8081.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for building, running the plugin from source and how the code works. Ideas and what's planned are in [IDEAS.md](IDEAS.md).
 
-## Licence
+## License
 
 Apache 2.0, like debug-db.
