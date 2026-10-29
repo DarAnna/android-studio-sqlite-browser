@@ -212,6 +212,30 @@ class DebugDbClientTest {
         assertEquals("SELECT COUNT(*) FROM big_table", server.lastQuerySql())
     }
 
+    @Test
+    fun `selectPage wraps the user's SELECT and sorts by column number`() {
+        server.responses["query"] = ARTICLE_PAGE
+        val select = UserSql.parse("SELECT article_id, name FROM article").select!!
+
+        client.selectPage(select, offset = 500, limit = 500, orderBy = 1, descending = true)
+
+        assertEquals(
+            """SELECT * FROM (SELECT article_id, name FROM"article") ORDER BY 2 DESC LIMIT 500 OFFSET 500""",
+            server.lastQuerySql(),
+        )
+    }
+
+    @Test
+    fun `selectCount counts the user's SELECT`() {
+        server.responses["query"] =
+            """{"tableInfos":[],"isSuccessful":true,"rows":[[{"dataType":"integer","value":7}]],
+               |"errorMessage":null,"isEditable":false,"isSelectQuery":true}
+            """.trimMargin()
+
+        assertEquals(7L, client.selectCount("""SELECT * FROM"article""""))
+        assertEquals("""SELECT COUNT(*) FROM (SELECT * FROM"article")""", server.lastQuerySql())
+    }
+
     @Test(expected = DebugDbException::class)
     fun `failed query throws with the server's message`() {
         server.responses["query"] =

@@ -19,7 +19,7 @@ Android Studio plugin (Kotlin, IntelliJ Platform Gradle Plugin 2.x) that shows a
 
 ## Rules that are easy to break
 
-- **The table name appears once in query SQL.** debug-db replaces every occurrence of the table name in `query` SQL with `[name]`, so a column `article_id` in table `article` breaks. Sort by column number (`ORDER BY 3`), and plan any `WHERE` with this in mind. The sample app's `article` table exists to catch this.
+- **The table name appears once in query SQL.** debug-db replaces every occurrence of the table name in `query` SQL with `[name]`, so a column `article_id` in table `article` breaks. Sort by column number (`ORDER BY 3`), and plan any `WHERE` with this in mind. The sample app's `article` table exists to catch this. User SQL goes through `UserSql`, which hides table names from debug-db instead (`FROM"article"`).
 - **Never call `getAllDataFromTheTable`.** It builds the whole table as one JSON string in the app and crashes large apps with `OutOfMemoryError`. Page through `query` with `LIMIT`/`OFFSET`.
 - **The server keeps state.** `tables(db)` opens `db`; every later call runs against it.
 - **Call `databases()` before `tables()`, and pass only names it returned.** Anything else kills debug-db's server thread until the app restarts. The port then accepts connections but never answers.

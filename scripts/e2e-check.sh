@@ -245,6 +245,22 @@ check_article_edit() {
         && "$row" == "integer:$id,text:e2e,real:2.5,text:null" && "$n" == "$ARTICLE_ROWS" ]]
 }
 
+check_user_query() {
+    # A query tab's SQL after UserSql: each table name glued to its keyword in quotes, so debug-db finds no table.
+    # Then it rewrites nothing, so article_id survives, and names the columns after the query's own.
+    local select='SELECT article_id, name AS n FROM"article" WHERE article_id <= 3'
+    local body ok cols ids n write
+    get "getTableList?database=shop.db" >/dev/null
+    body="$(query "SELECT * FROM ($select) ORDER BY 1 DESC LIMIT 2 OFFSET 0")"
+    ok="$(jq -r '.isSuccessful' <<<"$body")"
+    cols="$(jq -r '[.tableInfos[].title] | join(",")' <<<"$body")"
+    ids="$(jq -r '[.rows[][0].value] | join(",")' <<<"$body")"
+    n="$(query "SELECT COUNT(*) FROM ($select)" | first_value)"
+    write="$(query 'DELETE FROM"article" WHERE article_id = -1' | jq -r '.isSuccessful')"
+    echo "isSuccessful=$ok columns=$cols ids=$ids count=$n delete=$write"
+    [[ "$ok" == true && "$cols" == "article_id,n" && "$ids" == "3,2" && "$n" == 3 && "$write" == true ]]
+}
+
 check_settings_db() {
     local n
     get "getTableList?database=settings.db" >/dev/null
@@ -269,6 +285,7 @@ check "article sorted by name hits the table-name rewrite" check_article_name_so
 check "article filtered by column, as the plugin filters" check_article_filter
 check "article primary key from PRAGMA table_info" check_article_primary_key
 check "article row added, updated and deleted, as the plugin edits" check_article_edit
+check "user SQL with the table name hidden from debug-db" check_user_query
 check "settings.db flag table readable" check_settings_db
 check "app process still alive" check_app_alive
 

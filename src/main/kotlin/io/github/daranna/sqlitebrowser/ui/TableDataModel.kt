@@ -25,6 +25,20 @@ class TableDataModel : AbstractTableModel() {
     var sortColumn: Int? = null
     var sortDescending = false
 
+    /** Sorts by [column]: the first time ascending, the second descending, the third back to the rows' own order. */
+    fun toggleSort(column: Int) {
+        when {
+            sortColumn != column -> {
+                sortColumn = column
+                sortDescending = false
+            }
+
+            !sortDescending -> sortDescending = true
+
+            else -> sortColumn = null
+        }
+    }
+
     override fun getRowCount() = data.rows.size
 
     override fun getColumnCount() = data.columns.size

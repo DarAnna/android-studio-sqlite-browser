@@ -1,11 +1,8 @@
 package io.github.daranna.sqlitebrowser.ui
 
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
 import com.intellij.openapi.ui.Messages
-import com.intellij.ui.ColoredTableCellRenderer
-import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.table.JBTable
@@ -24,7 +21,6 @@ import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JScrollPane
-import javax.swing.JTable
 import javax.swing.KeyStroke
 import javax.swing.Timer
 
@@ -33,12 +29,9 @@ import javax.swing.Timer
  *
  * Every load reopens [database] on the server if another tab switched it, through [DebugDbClient.withDatabase].
  */
-class TableView(val database: String, val tableName: String, client: DebugDbClient) :
-    JPanel(BorderLayout()),
-    Disposable {
+class TableView(override val database: String, val tableName: String, client: DebugDbClient) : BrowserTab() {
 
-    /** Replaced when the panel reconnects to the same app, since the new client is the one that knows the server's state. */
-    var client: DebugDbClient = client
+    override var client: DebugDbClient = client
         set(value) {
             field = value
             primaryKey = null
@@ -154,18 +147,8 @@ class TableView(val database: String, val tableName: String, client: DebugDbClie
         filterTimer.restart()
     }
 
-    /** First click sorts ascending, second descending, third goes back to table order. */
     private fun sortBy(column: Int) {
-        when {
-            model.sortColumn != column -> {
-                model.sortColumn = column
-                model.sortDescending = false
-            }
-
-            !model.sortDescending -> model.sortDescending = true
-
-            else -> model.sortColumn = null
-        }
+        model.toggleSort(column)
         offset = 0
         loadPage()
     }
@@ -192,7 +175,7 @@ class TableView(val database: String, val tableName: String, client: DebugDbClie
                 if (key != null) primaryKey = key
                 totalRows = count
                 model.keyColumn = keyColumn(data)
-                showData(data)
+                showKeepingWidths(table, data)
                 if (this.filters.size != data.columns.size) this.filters = List(data.columns.size) { "" }
                 filterRow.show(this.filters)
                 updatePager()
@@ -290,22 +273,6 @@ class TableView(val database: String, val tableName: String, client: DebugDbClie
         }.show(table, e.x, e.y)
     }
 
-    /** Replaces the rows; keeps the column widths the user set when the columns are the same. */
-    private fun showData(data: DebugDbClient.TableData) {
-        val widths = if (data.columns == model.data.columns) {
-            table.columnModel.columns.toList().associate { it.modelIndex to it.width }
-        } else {
-            emptyMap()
-        }
-        model.data = data
-        table.columnModel.columns.toList().forEach { column ->
-            widths[column.modelIndex]?.let {
-                column.preferredWidth = it
-                column.width = it
-            }
-        }
-    }
-
     private fun updatePager() {
         val shown = model.rowCount
         pageLabel.text = if (shown == 0) "" else "${offset + 1}–${offset + shown} of $totalRows"
@@ -313,15 +280,14 @@ class TableView(val database: String, val tableName: String, client: DebugDbClie
         nextButton.isEnabled = offset + shown < totalRows
     }
 
+    override val title get() = tableName
+
+    override val tooltip get() = "$database › $tableName"
+
+    override fun savedTab() = SavedSession.Tab(database, tableName)
+
     override fun dispose() {
         filterTimer.stop()
-    }
-
-    /** Shows NULL as a grey "NULL", so it can't be mistaken for an empty string. */
-    private class NullAwareRenderer : ColoredTableCellRenderer() {
-        override fun customizeCellRenderer(table: JTable, value: Any?, selected: Boolean, hasFocus: Boolean, row: Int, column: Int) {
-            if (value == null) append("NULL", SimpleTextAttributes.GRAYED_ATTRIBUTES) else append(value.toString())
-        }
     }
 
     companion object {

@@ -25,8 +25,11 @@ This plugin does the same job as the Database Inspector, but better. It starts w
   - NULL shows as a grey `NULL`, so it doesn't look like an empty string.
   - Your app's screens don't update right away when they watch the data through Room (`Flow`, `LiveData`): they show the change the next time they read, e.g. when you reopen the screen. debug-db writes on its own connection, which Room doesn't notice. Android Studio's Database Inspector does tell Room.
 - **Refresh** a tab to see what your app wrote since.
-
-Coming next: a query tab for your own SQL.
+- **Your own SQL.** Press **New Query** above the tree to write SQL for the selected database; with a table selected, it starts as `SELECT * FROM` that table. Right-clicking a database or table does the same. Press **Run** (⌘⏎ or Ctrl+Enter); with text selected, only the selection runs.
+  - A `SELECT` (or `WITH … SELECT`) loads 500 rows at a time, and you can sort it by clicking a header, like a table.
+  - Several statements separated by `;` run in order, and you see the result of the last one. Paging and sorting run only that last `SELECT` again, never the statements before it.
+  - Writes (`UPDATE`, `INSERT`, `DELETE`, …) go straight into the app's database. Query results can't be edited in the grid.
+  - The SQL is kept when you restart Android Studio, but it doesn't run until you press **Run**.
 
 ## Usage
 
