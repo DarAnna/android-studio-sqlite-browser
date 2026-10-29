@@ -97,6 +97,19 @@ From reading debug-db 1.0.7's `RequestHandler.java`. The client handles these; t
 - **Temporary views don't work.** A `CREATE TEMP VIEW` over the app's tables fails with "no such table" when selected from, so the query tab can't use one to learn column names.
 - The `getDbList` rows are `[name, isEncrypted, isDownloadable]`, and the list ends with a fake database, `APP_SHARED_PREFERENCES`.
 
+## Publishing to the Marketplace
+
+`signPlugin` and `publishPlugin` need a signing key, its certificate, the key's password and a Marketplace token. None of them go in the repo. Make the key and certificate with `openssl` as in [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html), and put them outside the repo:
+
+| What | Locally | CI (environment variable) |
+|---|---|---|
+| Certificate | `~/.config/jetbrains-marketplace/chain.crt` | `CERTIFICATE_CHAIN` (Base64) |
+| Private key | `~/.config/jetbrains-marketplace/private.pem` | `PRIVATE_KEY` (Base64) |
+| Key password, only for an encrypted key | `marketplaceKeyPassword` in `~/.gradle/gradle.properties` | `PRIVATE_KEY_PASSWORD` |
+| Token | `marketplaceToken` in `~/.gradle/gradle.properties` | `PUBLISH_TOKEN` |
+
+When both files exist, the build uses them instead of the variables. Then `./gradlew signPlugin` writes the signed zip to `build/distributions/`, and `./gradlew publishPlugin` uploads it. The first version of a plugin is uploaded by hand on plugins.jetbrains.com.
+
 ## What's next
 
 See [IDEAS.md](IDEAS.md).
