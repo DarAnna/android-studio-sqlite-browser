@@ -22,13 +22,13 @@ This plugin does the same job as the App Inspection's Database Inspector plus mo
 
 - **Tabs.** All databases and their tables sit in a tree; double-click a table to open it in its own tab. Keep several tables from several databases open side by side.
 - **Picks up where you left off.** The plugin remembers the device, port and open tabs. Next time, it reconnects by itself if the same app is running.
-- **Edit the data.** Double-click a cell to change it, right-click it to set it to NULL. **Add Row** inserts a row; columns you leave empty get their default. Select rows and press Delete (or **Delete**) to remove them. Changes go straight into the app's database.
+- **Edit the data.** Double-click a cell to change it, right-click it to set it to NULL. **Add Row** inserts a row; columns you leave empty get their default. Select rows and press Delete (or **Delete Rows** in the tab's toolbar) to remove them. Changes go straight into the app's database.
   - Editing and deleting rows need a table with a single-column primary key, which picks the row. Other tables can only get new rows.
   - The key itself can't be changed.
   - Typing the text `null` stores NULL: debug-db can't tell them apart.
   - NULL shows as a grey `NULL`, so it doesn't look like an empty string.
   - Your app's screens may not show the change right away: see [Limitations](#limitations).
-- **Refresh** a tab to see what your app wrote since.
+- **Refresh** (in the tab's toolbar) to see what your app wrote since.
 - **Your own SQL.** Press **New Query** above the tree to write SQL for the selected database; with a table selected, it starts as `SELECT * FROM` that table. Right-clicking a database or table does the same. Press **Run** (⌘⏎ or Ctrl+Enter); with text selected, only the selection runs.
 
   ![A query tab: favorites and recent queries on the left, the SQL and its result on the right](docs/screenshots/query.png)
@@ -38,7 +38,7 @@ This plugin does the same job as the App Inspection's Database Inspector plus mo
   - Writes (`UPDATE`, `INSERT`, `DELETE`, …) go straight into the app's database, but Room doesn't notice them: see [Limitations](#limitations). Query results can't be edited in the grid.
   - The SQL is kept when you restart Android Studio, but it doesn't run until you press **Run**.
   - **New Query** on a database starts with the SQL you last ran there, even after you closed its tab. On a table, it starts with `SELECT * FROM` that table.
-  - The list beside the editor shows the database's **Favorites** and its 20 most **Recent** queries. Click one to open it: a query that only reads (`SELECT`, `PRAGMA table_info(…)`, …) runs right away; one that may change data waits for **Run**. It replaces the editor's SQL when that is empty or saved too, and otherwise opens in a new tab. The list button next to **Run** hides the list in all tabs.
+  - The list beside the editor shows the database's **Favorites** and its 20 most **Recent** queries. Click one to open it: a query that only reads (`SELECT`, `PRAGMA table_info(…)`, …) runs right away; one that may change data waits for **Run**. It replaces the editor's SQL when that is empty or saved too, and otherwise opens in a new tab. The button at the top of the list hides it in all tabs.
   - The ☆ next to **Run** adds the editor's SQL to Favorites, named after its first line, and removes it again. Right-click a favorite (or press F2) to rename it, or a recent query to add it to Favorites. Favorites and recent queries are kept per app and database, in all your projects.
   - The editor highlights SQL and completes keywords and the database's table and column names (Ctrl+Space). It learns the names when the tab opens, on reconnect, and after you run `CREATE`, `DROP` or `ALTER`.
 

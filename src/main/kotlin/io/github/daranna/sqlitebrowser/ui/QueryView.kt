@@ -2,29 +2,29 @@ package io.github.daranna.sqlitebrowser.ui
 
 import com.intellij.icons.AllIcons
 import com.intellij.ide.util.PropertiesComponent
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.actionSystem.KeyboardShortcut
+import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.SystemInfo
 import com.intellij.ui.OnePixelSplitter
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.table.JBTable
-import com.intellij.util.ui.JBUI
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbException
 import io.github.daranna.sqlitebrowser.debugdb.UserSql
 import java.awt.BorderLayout
-import java.awt.FlowLayout
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.JButton
+import javax.swing.Icon
+import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.KeyStroke
 
@@ -61,30 +61,23 @@ class QueryView(
         }
 
     private val editor = SqlEditor(project, sql)
-    private val runButton = JButton("Run", AllIcons.Actions.Execute).apply {
-        toolTipText = "Run the selected SQL, or all of it (${if (SystemInfo.isMac) "⌘⏎" else "Ctrl+Enter"})"
-    }
-    private val starButton = JButton().apply { isFocusable = false }
 
     /** In place of the saved queries while they are hidden, at the same edge, to bring them back. */
     private val savedStripe = FoldedStripe(AllIcons.Actions.ListFiles, "Saved queries") { setSavedShown(true) }
     private val savedList = SavedQueryList(app, database, this, onHide = { setSavedShown(false) }, onOpen = ::openSaved)
     private val sides = OnePixelSplitter(false, "sqliteBrowser.savedQueries.proportion", 0.25f)
-    private val prevButton = JButton("◀")
-    private val nextButton = JButton("▶")
-    private val pageLabel = JBLabel()
-    private val status = JBLabel()
+    private val status = StatusLabel()
 
     private val model = TableDataModel()
     private val table = JBTable(model).apply {
         autoResizeMode = JBTable.AUTO_RESIZE_OFF
         setDefaultRenderer(Any::class.java, NullAwareRenderer())
+        tableHeader.defaultRenderer = HeaderRenderer(tableHeader.defaultRenderer)
     }
 
     /** The SELECT whose rows are shown, from the last run; null when that run ended in something else. */
     private var select: String? = null
-    private var offset = 0
-    private var totalRows = 0L
+    private val pager = Pager({ select != null }, ::loadPage)
 
     /** Counts runs and page loads, so a slow answer doesn't replace a newer one. */
     private var loadSeq = 0
@@ -92,31 +85,14 @@ class QueryView(
     val sql: String get() = editor.text
 
     init {
+        val run = RunAction()
         val top = JPanel(BorderLayout()).apply {
+            add(tabBar(toolbar(this@QueryView, listOf(run, FavoriteAction())), null), BorderLayout.NORTH)
             add(editor.component, BorderLayout.CENTER)
-            add(
-                JPanel(FlowLayout(FlowLayout.LEFT, 4, 2)).apply {
-                    add(runButton)
-                    add(starButton)
-                },
-                BorderLayout.SOUTH,
-            )
         }
-        val bottom = JPanel(BorderLayout()).apply {
-            add(status, BorderLayout.CENTER)
-            add(
-                JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
-                    add(prevButton)
-                    add(pageLabel)
-                    add(nextButton)
-                },
-                BorderLayout.EAST,
-            )
-        }
-        status.border = JBUI.Borders.empty(2, 6)
         val results = JPanel(BorderLayout()).apply {
-            add(JBScrollPane(table), BorderLayout.CENTER)
-            add(bottom, BorderLayout.SOUTH)
+            add(tabBar(null, status, toolbar(this@QueryView, pager.actions)), BorderLayout.NORTH)
+            add(ScrollPaneFactory.createScrollPane(table, true), BorderLayout.CENTER)
         }
         sides.firstComponent = savedList.component
         sides.secondComponent = OnePixelSplitter(true, 0.3f).apply {
@@ -126,17 +102,12 @@ class QueryView(
         add(savedStripe, BorderLayout.WEST)
         add(sides, BorderLayout.CENTER)
 
-        runButton.addActionListener { runSql() }
-        starButton.addActionListener { toggleFavorite() }
         ApplicationManager.getApplication().messageBus.connect(this).subscribe(
             SavedQueries.TOPIC,
-            SavedQueries.Listener {
-                updateStar()
-                showSaved()
-            },
+            SavedQueries.Listener { showSaved() },
         )
         // On the component, so it wins over the keymap's ⌘⏎ (Split Line) in the editor.
-        DumbAwareAction.create { runSql() }.registerCustomShortcutSet(
+        run.registerCustomShortcutSet(
             CustomShortcutSet(
                 KeyboardShortcut(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK), null),
                 KeyboardShortcut(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.META_DOWN_MASK), null),
@@ -146,32 +117,19 @@ class QueryView(
         )
         editor.document.addDocumentListener(
             object : DocumentListener {
-                override fun documentChanged(event: DocumentEvent) {
-                    updateStar()
-                    onSqlChanged()
-                }
+                override fun documentChanged(event: DocumentEvent) = onSqlChanged()
             },
             this,
         )
-        prevButton.addActionListener {
-            offset = maxOf(0, offset - TableView.PAGE_SIZE)
-            loadPage()
-        }
-        nextButton.addActionListener {
-            offset += TableView.PAGE_SIZE
-            loadPage()
-        }
         table.tableHeader.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 val column = table.columnAtPoint(e.point)
                 if (column < 0 || select == null) return
                 model.toggleSort(table.convertColumnIndexToModel(column))
-                offset = 0
+                pager.offset = 0
                 loadPage()
             }
         })
-        updatePager()
-        updateStar()
         showSaved()
         status.text = "SQL on $database. Press Run."
         loadSchema()
@@ -213,10 +171,27 @@ class QueryView(
         revalidate()
     }
 
-    private fun updateStar() {
-        val favorite = sql.isNotBlank() && SavedQueries.get().favoriteOf(app, database, sql) != null
-        starButton.icon = if (favorite) AllIcons.Nodes.Favorite else AllIcons.Nodes.NotFavoriteOnHover
-        starButton.toolTipText = if (favorite) "Remove this SQL from Favorites" else "Add this SQL to Favorites"
+    private inner class RunAction : DumbAwareAction("Run", "Run the selected SQL, or all of it", AllIcons.Actions.Execute) {
+        init {
+            templatePresentation.putClientProperty(ActionUtil.SHOW_TEXT_IN_TOOLBAR, true)
+        }
+
+        override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+        override fun actionPerformed(e: AnActionEvent) = runSql()
+    }
+
+    /** The star: whether the editor's SQL is a favorite, and a click to make it one or not. */
+    private inner class FavoriteAction : DumbAwareAction() {
+        override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+        override fun update(e: AnActionEvent) {
+            val favorite = sql.isNotBlank() && SavedQueries.get().favoriteOf(app, database, sql) != null
+            e.presentation.icon = if (favorite) AllIcons.Nodes.Favorite else AllIcons.Nodes.NotFavoriteOnHover
+            e.presentation.text = if (favorite) "Remove from Favorites" else "Add to Favorites"
+        }
+
+        override fun actionPerformed(e: AnActionEvent) = toggleFavorite()
     }
 
     /**
@@ -249,7 +224,7 @@ class QueryView(
         val seq = ++loadSeq
         // The old rows would page and sort as if they were the new query's.
         select = null
-        offset = 0
+        pager.offset = 0
         model.sortColumn = null
         showKeepingWidths(table, DebugDbClient.TableData(emptyList(), emptyList(), false))
         updatePager()
@@ -281,7 +256,7 @@ class QueryView(
     private fun loadPage() {
         val select = select ?: return
         val client = client
-        val offset = offset
+        val offset = pager.offset
         val sortColumn = model.sortColumn
         val descending = model.sortDescending
         val seq = ++loadSeq
@@ -297,22 +272,24 @@ class QueryView(
 
     private fun show(shown: Shown) {
         select = shown.select
-        totalRows = shown.count
+        pager.total = shown.count
         showKeepingWidths(table, shown.data)
         updatePager()
-        status.text = "${shown.count} rows"
+        status.text = ""
     }
 
     private fun updatePager() {
-        val shown = model.rowCount
-        pageLabel.text = if (select == null || shown == 0) "" else "${offset + 1}–${offset + shown} of $totalRows"
-        prevButton.isEnabled = select != null && offset > 0
-        nextButton.isEnabled = select != null && offset + shown < totalRows
+        pager.shown = model.rowCount
+        pager.update()
     }
 
     override val title get() = "Query ($database)"
 
     override val tooltip get() = "SQL on $database"
+
+    override val icon: Icon get() = AllIcons.Nodes.DataSchema
+
+    override val preferredFocus: JComponent get() = editor.component
 
     override fun savedTab() = SavedSession.Tab(database, query = sql)
 

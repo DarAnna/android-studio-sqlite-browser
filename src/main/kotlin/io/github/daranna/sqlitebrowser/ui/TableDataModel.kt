@@ -21,7 +21,7 @@ class TableDataModel : AbstractTableModel() {
     /** Called with the row, the column and the typed text, or null for NULL, when the user changes a cell. */
     var onEdit: (row: Int, column: Int, value: String?) -> Unit = { _, _, _ -> }
 
-    /** The column the rows are sorted by on the server, shown with an arrow in its header. */
+    /** The column the rows are sorted by on the server, shown with an arrow in its header by [HeaderRenderer]. */
     var sortColumn: Int? = null
     var sortDescending = false
 
@@ -43,11 +43,8 @@ class TableDataModel : AbstractTableModel() {
 
     override fun getColumnCount() = data.columns.size
 
-    override fun getColumnName(column: Int): String {
-        val key = if (column == keyColumn) " 🔑" else ""
-        val arrow = if (column == sortColumn) (if (sortDescending) " ▼" else " ▲") else ""
-        return data.columns[column].name + key + arrow
-    }
+    /** The bare name: [HeaderRenderer] marks the key and the sort with icons. */
+    override fun getColumnName(column: Int) = data.columns[column].name
 
     override fun getValueAt(rowIndex: Int, columnIndex: Int): Any? = data.rows[rowIndex].getOrNull(columnIndex)?.value
 

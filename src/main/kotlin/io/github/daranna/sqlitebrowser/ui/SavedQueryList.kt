@@ -9,12 +9,10 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.ColoredListCellRenderer
-import com.intellij.ui.InplaceButton
-import com.intellij.ui.JBColor
+import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
-import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.text.DateFormatUtil
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -32,7 +30,7 @@ import javax.swing.SwingUtilities
 
 /**
  * The favorites and recent queries of one database, beside a query tab's editor. A click hands the query to
- * [onOpen]; a click on "Recent" folds that section. Rename and delete are on the context menu, F2 and Delete. The
+ * [onOpen]; a click on a section's header folds it. Rename and delete are on the context menu, F2 and Delete. The
  * button in its header calls [onHide].
  */
 internal class SavedQueryList(
@@ -43,7 +41,7 @@ internal class SavedQueryList(
     private val onOpen: (SavedQueries.Query) -> Unit,
 ) {
     private sealed interface Row
-    private class Header(val title: String, val folds: Boolean) : Row
+    private class Header(val title: String) : Row
     private class Hint(val text: String) : Row
     private class Saved(val query: SavedQueries.Query, val favorite: Boolean) : Row
 
@@ -53,19 +51,18 @@ internal class SavedQueryList(
         cellRenderer = Renderer()
     }
 
-    val component: JComponent = JPanel(BorderLayout()).apply {
-        add(
-            JPanel(BorderLayout()).apply {
-                border = JBUI.Borders.compound(JBUI.Borders.customLineBottom(JBColor.border()), JBUI.Borders.empty(2, 6))
-                add(JBLabel("Saved queries").apply { foreground = UIUtil.getContextHelpForeground() }, BorderLayout.CENTER)
-                add(InplaceButton("Hide saved queries", AllIcons.General.HideToolWindow) { onHide() }, BorderLayout.EAST)
-            },
-            BorderLayout.NORTH,
-        )
-        add(JBScrollPane(list).apply { border = JBUI.Borders.empty() }, BorderLayout.CENTER)
-    }
+    val component: JComponent = JPanel(BorderLayout())
 
     init {
+        // A bar of the same height as the editor's beside it, so their lines meet.
+        val title = JBLabel("Saved queries").apply {
+            foreground = UIUtil.getContextHelpForeground()
+            border = JBUI.Borders.emptyLeft(8)
+        }
+        val hide = action("Hide Saved Queries", AllIcons.General.HideToolWindow, perform = onHide)
+        component.add(tabBar(null, title, toolbar(component, listOf(hide))), BorderLayout.NORTH)
+        component.add(ScrollPaneFactory.createScrollPane(list, true), BorderLayout.CENTER)
+
         list.addMouseListener(object : MouseAdapter() {
             override fun mouseReleased(e: MouseEvent) {
                 val index = list.locationToIndex(e.point)
@@ -97,8 +94,8 @@ internal class SavedQueryList(
         when (row) {
             is Saved -> onOpen(row.query)
 
-            is Header -> if (row.folds) {
-                recentShown = !recentShown
+            is Header -> {
+                if (!folded.remove(row.title)) folded += row.title
                 SavedQueries.changed()
             }
 
@@ -148,11 +145,13 @@ internal class SavedQueryList(
         val recent = queries.recentOf(app, database)
         model.replaceAll(
             buildList {
-                add(Header("Favorites", folds = false))
-                if (favorites.isEmpty()) add(Hint("Star a query to keep it here"))
-                favorites.forEach { add(Saved(it, favorite = true)) }
-                add(Header("Recent", folds = true))
-                if (recentShown) {
+                add(Header(FAVORITES))
+                if (FAVORITES !in folded) {
+                    if (favorites.isEmpty()) add(Hint("Star a query to keep it here"))
+                    favorites.forEach { add(Saved(it, favorite = true)) }
+                }
+                add(Header(RECENT))
+                if (RECENT !in folded) {
                     if (recent.isEmpty()) add(Hint("Queries you run show here"))
                     recent.forEach { add(Saved(it, favorite = false)) }
                 }
@@ -162,16 +161,20 @@ internal class SavedQueryList(
         if (index >= 0) list.selectedIndex = index
     }
 
+    /** Like a tree: headers with their fold arrow at the edge, their rows indented so the rows' icons sit under the titles. */
     private inner class Renderer : ColoredListCellRenderer<Row>() {
+        private val edge = ipad.left
+
         override fun customizeCellRenderer(list: JList<out Row>, value: Row, index: Int, selected: Boolean, hasFocus: Boolean) {
             toolTipText = null
+            ipad.left = if (value is Header) edge else edge + AllIcons.General.ArrowDown.iconWidth + iconTextGap
             when (value) {
                 is Header -> {
-                    if (value.folds) icon = if (recentShown) AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
+                    icon = if (value.title in folded) AllIcons.General.ArrowRight else AllIcons.General.ArrowDown
                     append(value.title, SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
                 }
 
-                is Hint -> append(value.text, SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
+                is Hint -> append(value.text, SimpleTextAttributes.GRAYED_ATTRIBUTES)
 
                 is Saved -> {
                     toolTipText = "<html><pre>${StringUtil.escapeXmlEntities(value.query.sql.trim())}</pre></html>"
@@ -179,6 +182,7 @@ internal class SavedQueryList(
                         icon = AllIcons.Nodes.Favorite
                         append(value.query.name)
                     } else {
+                        icon = AllIcons.Vcs.History
                         append(value.query.sql.trim().replace(WHITESPACE, " "))
                         if (value.query.time > 0) {
                             append(
@@ -194,9 +198,11 @@ internal class SavedQueryList(
 
     private companion object {
         val WHITESPACE = Regex("\\s+")
+        const val FAVORITES = "Favorites"
+        const val RECENT = "Recent"
 
-        /** The same in every tab, until Android Studio restarts. */
-        var recentShown = true
+        /** The titles of the folded sections, the same in every tab, until Android Studio restarts. */
+        val folded = mutableSetOf<String>()
     }
 }
 
