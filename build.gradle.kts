@@ -49,14 +49,26 @@ intellijPlatform {
             sinceBuild = "261"
         }
     }
-    // Marketplace secrets come from the environment, never from a file in the repo.
+    // Marketplace secrets never live in the repo. Locally: the key and certificate in ~/.config/jetbrains-marketplace,
+    // the password and token in ~/.gradle/gradle.properties. CI: environment variables (see CONTRIBUTING.md).
     signing {
-        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
-        privateKey = providers.environmentVariable("PRIVATE_KEY")
-        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+        val keyDir = File(System.getProperty("user.home"), ".config/jetbrains-marketplace")
+        val chainFile = keyDir.resolve("chain.crt")
+        val keyFile = keyDir.resolve("private.pem")
+        if (chainFile.isFile && keyFile.isFile) {
+            certificateChainFile = chainFile
+            privateKeyFile = keyFile
+        } else {
+            certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+            privateKey = providers.environmentVariable("PRIVATE_KEY")
+        }
+        password =
+            providers
+                .gradleProperty("marketplaceKeyPassword")
+                .orElse(providers.environmentVariable("PRIVATE_KEY_PASSWORD"))
     }
     publishing {
-        token = providers.environmentVariable("PUBLISH_TOKEN")
+        token = providers.gradleProperty("marketplaceToken").orElse(providers.environmentVariable("PUBLISH_TOKEN"))
     }
     pluginVerification {
         ides {
