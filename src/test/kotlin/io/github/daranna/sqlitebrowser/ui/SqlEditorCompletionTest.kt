@@ -1,6 +1,8 @@
 package io.github.daranna.sqlitebrowser.ui
 
 import com.android.tools.idea.lang.androidSql.AndroidSqlFileType
+import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 
@@ -10,6 +12,15 @@ import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
  * JUnit 3 style, as the platform's fixtures need, so names are camel case: ktlint allows backticks only on `@Test`.
  */
 class SqlEditorCompletionTest : BasePlatformTestCase() {
+
+    override fun setUp() {
+        super.setUp()
+        // Without it every completion list is just empty, which looks like a broken schema hook.
+        assertTrue(
+            "The Android plugin didn't load in the test IDE; see \"Tests find no completions\" in CONTRIBUTING.md",
+            PluginManagerCore.isLoaded(PluginId.getId("org.jetbrains.android")),
+        )
+    }
 
     private fun complete(sql: String, queryTab: Boolean = true): List<String> {
         myFixture.configureByText(AndroidSqlFileType.INSTANCE, sql)
