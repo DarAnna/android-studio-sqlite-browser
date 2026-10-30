@@ -36,6 +36,9 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <p>0.2.0: a tidier tool window. Tables and query results get a toolbar with a pager, tabs are editor tabs
+        with a close button, filter fields line up with their columns, and the primary key and sort show as header
+        icons. The SQL editor has line numbers, and saved queries fold like a tree.</p>
         <p>0.1.0: first release. Browse tables with paging, sorting and a filter per column, follow foreign keys,
         edit cells and rows, and run your own SQL with completion, recent queries and favorites.</p>
     ]]></change-notes>
