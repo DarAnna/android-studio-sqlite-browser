@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DataContext
@@ -21,14 +22,15 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.EditorNotificationPanel
 import com.intellij.ui.InlineBanner
-import com.intellij.ui.InplaceButton
 import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanelWithEmptyText
-import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.components.JBTabbedPane
+import com.intellij.ui.tabs.JBTabsFactory
+import com.intellij.ui.tabs.TabInfo
+import com.intellij.ui.tabs.TabsListener
 import com.intellij.util.ui.GraphicsUtil
 import com.intellij.util.ui.JBUI
 import io.github.daranna.sqlitebrowser.adb.Adb
@@ -37,7 +39,6 @@ import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Color
 import java.awt.Component
-import java.awt.FlowLayout
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.datatransfer.StringSelection
@@ -76,14 +77,20 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
     private var device: Adb.Device? = null
 
     private val progress = JBLabel(AnimatedIcon.Default.INSTANCE).apply {
-        border = JBUI.Borders.emptyRight(8)
+        border = JBUI.Borders.empty(0, 8)
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
         isVisible = false
     }
-    private val bannerHolder = JPanel(BorderLayout())
+
+    /** Holds a banner, if there is one; hidden otherwise, so it leaves no gap under the toolbar. */
+    private val bannerHolder = JPanel(BorderLayout()).apply {
+        border = JBUI.Borders.empty(0, 8, 8, 8)
+        isVisible = false
+    }
     private val status = PanelStatus()
 
     private val tree = DatabaseTree(status, ::openTable, ::openQuery)
-    private val tabs = JBTabbedPane()
+    private val tabs = JBTabsFactory.createEditorTabs(project, this)
     private val emptyTabs = JBPanelWithEmptyText()
     private val contentCards = CardLayout()
     private val content = JPanel(contentCards)
@@ -113,31 +120,35 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
         val toolbar = ActionManager.getInstance().createActionToolbar(TOOLBAR_PLACE, actions, true).apply {
             targetComponent = this@SqliteBrowserPanel
         }
-        bannerHolder.border = JBUI.Borders.empty(0, 8, 4, 8)
         val top = JPanel(BorderLayout()).apply {
+            border = JBUI.Borders.customLineBottom(JBColor.border())
             add(toolbar.component, BorderLayout.CENTER)
             add(progress, BorderLayout.EAST)
             add(bannerHolder, BorderLayout.SOUTH)
         }
 
         content.add(emptyTabs, EMPTY)
-        content.add(tabs, TABS)
+        content.add(tabs.component, TABS)
         val splitter = OnePixelSplitter(false, 0.2f).apply {
-            firstComponent = JBScrollPane(tree.component)
+            firstComponent = ScrollPaneFactory.createScrollPane(tree.component, true)
             secondComponent = content
         }
 
         add(top, BorderLayout.NORTH)
         add(splitter, BorderLayout.CENTER)
 
-        tabs.addMouseListener(object : MouseAdapter() {
+        tabs.addTabMouseListener(object : MouseAdapter() {
             override fun mouseReleased(e: MouseEvent) {
                 if (!SwingUtilities.isMiddleMouseButton(e)) return
-                val index = tabs.indexAtLocation(e.x, e.y)
-                if (index >= 0) closeTab(tabs.getComponentAt(index) as BrowserTab)
+                (tabs.findInfo(e)?.component as? BrowserTab)?.let(::closeTab)
             }
         })
-        tabs.addChangeListener { saveTabs() }
+        tabs.addListener(
+            object : TabsListener {
+                override fun selectionChanged(oldSelection: TabInfo?, newSelection: TabInfo?) = saveTabs()
+            },
+            this,
+        )
         showContent()
 
         pollDevices()
@@ -222,7 +233,7 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
                 tree.show(newClient, databases)
                 if (sameApp) views().forEach { it.client = newClient } else views().forEach(::closeTab)
                 reopen.forEach { tab -> tab.query?.let { openQuery(tab.database, sql = it) } ?: openTable(tab.database, tab.table) }
-                views().firstOrNull { it.savedTab() == savedSelection }?.let(tabs::setSelectedComponent)
+                views().firstOrNull { it.savedTab() == savedSelection }?.let(::selectTab)
                 // Drops another app's saved tabs when nothing is open, which no tab change would.
                 saveTabs()
                 status.done()
@@ -256,6 +267,7 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
     /** The tabs, or with none open, a hint at what to do. */
     private fun showContent() {
         if (tabs.tabCount > 0) return contentCards.show(content, TABS)
+        tree.component.emptyText.text = if (connection == null) "" else "The app has no databases"
         val text = emptyTabs.emptyText.clear()
         val device = device
         when {
@@ -280,7 +292,7 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
     private fun openTable(database: String, table: String) {
         views().firstOrNull {
             it is TableView && it.database == database && it.tableName == table
-        }?.let { return tabs.setSelectedComponent(it) }
+        }?.let { return selectTab(it) }
         tableView(database, table)?.let(::addTab)
     }
 
@@ -317,36 +329,36 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
 
     private fun addTab(view: BrowserTab) {
         Disposer.register(this, view)
-        tabs.addTab(view.title, view)
-        val index = tabs.indexOfComponent(view)
-        tabs.setToolTipTextAt(index, view.tooltip)
-        tabs.setTabComponentAt(index, tabHeader(view))
-        tabs.selectedIndex = index
+        val info = TabInfo(view).setText(view.title).setTooltipText(view.tooltip).setIcon(view.icon)
+            .setPreferredFocusableComponent(view.preferredFocus)
+        info.setTabLabelActions(DefaultActionGroup(CloseTabAction(view)), ActionPlaces.EDITOR_TAB)
+        tabs.addTab(info)
+        // Shows the tabs first, so the new one is selected in a showing component and takes focus.
         showContent()
+        tabs.select(info, true)
     }
 
-    private fun tabHeader(view: BrowserTab) = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-        isOpaque = false
-        add(JBLabel(view.title).apply { border = JBUI.Borders.emptyRight(4) })
-        add(InplaceButton("Close", AllIcons.Actions.Close) { closeTab(view) })
+    private fun selectTab(view: BrowserTab) {
+        tabs.findInfo(view)?.let { tabs.select(it, true) }
     }
 
     private fun closeTab(view: BrowserTab) {
-        val back = openedFrom.remove(view)?.takeIf { tabs.indexOfComponent(it) >= 0 }
+        val back = openedFrom.remove(view)?.takeIf { tabs.findInfo(it) != null }
         openedFrom.values.removeAll { it == view }
-        tabs.remove(view)
-        back?.let { tabs.setSelectedComponent(it) }
+        tabs.findInfo(view)?.let { tabs.removeTab(it) }
+        back?.let(::selectTab)
         Disposer.dispose(view)
+        saveTabs()
         showContent()
     }
 
     /** Also called as the user types in a query tab, so the saved SQL stays current. */
     private fun saveTabs() {
         saved.tabs = views().map { it.savedTab() }.toMutableList()
-        saved.selectedTab = (tabs.selectedComponent as? BrowserTab)?.savedTab()
+        saved.selectedTab = (tabs.selectedInfo?.component as? BrowserTab)?.savedTab()
     }
 
-    private fun views(): List<BrowserTab> = (0 until tabs.tabCount).map { tabs.getComponentAt(it) as BrowserTab }
+    private fun views(): List<BrowserTab> = tabs.tabs.map { it.component as BrowserTab }
 
     override fun dispose() {
         devicePoll.stop()
@@ -388,12 +400,14 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
         private fun showBanner(banner: InlineBanner) {
             bannerHolder.removeAll()
             bannerHolder.add(banner)
+            bannerHolder.isVisible = true
             bannerHolder.revalidate()
             bannerHolder.repaint()
         }
 
         private fun hideBanner() {
             bannerHolder.removeAll()
+            bannerHolder.isVisible = false
             bannerHolder.revalidate()
             bannerHolder.repaint()
         }
@@ -432,6 +446,16 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
         }
 
         override fun actionPerformed(e: AnActionEvent) = connect(target, connection?.port ?: saved.port)
+    }
+
+    private inner class CloseTabAction(private val view: BrowserTab) : DumbAwareAction("Close Tab", null, AllIcons.Actions.Close) {
+        init {
+            templatePresentation.hoveredIcon = AllIcons.Actions.CloseHovered
+        }
+
+        override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+        override fun actionPerformed(e: AnActionEvent) = closeTab(view)
     }
 
     private class InfoAction(text: String) : DumbAwareAction(text) {

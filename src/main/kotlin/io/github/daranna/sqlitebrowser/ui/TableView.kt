@@ -1,26 +1,24 @@
 package io.github.daranna.sqlitebrowser.ui
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
 import com.intellij.openapi.ui.Messages
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.table.JBTable
-import com.intellij.util.ui.JBUI
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient.ForeignKey
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient.RowValue
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbException
 import java.awt.BorderLayout
 import java.awt.Cursor
-import java.awt.FlowLayout
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseMotionAdapter
 import javax.swing.AbstractAction
-import javax.swing.JButton
+import javax.swing.Icon
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JScrollPane
@@ -49,13 +47,8 @@ class TableView(
             loadPage()
         }
 
-    private val refreshButton = JButton("Refresh")
-    private val addButton = JButton("Add Row")
-    private val deleteButton = JButton("Delete")
-    private val prevButton = JButton("◀")
-    private val nextButton = JButton("▶")
-    private val pageLabel = JBLabel()
-    private val status = JBLabel()
+    private val status = StatusLabel()
+    private val pager = Pager(load = ::loadPage)
 
     private val model = TableDataModel()
     private val table: JBTable = object : JBTable(model) {
@@ -71,6 +64,7 @@ class TableView(
         autoResizeMode = JBTable.AUTO_RESIZE_OFF
         // Stops editing when the user clicks elsewhere, e.g. on Refresh, instead of keeping the editor open.
         putClientProperty("terminateEditOnFocusLost", true)
+        tableHeader.defaultRenderer = HeaderRenderer(tableHeader.defaultRenderer)
         setDefaultRenderer(
             Any::class.java,
             NullAwareRenderer { row, column -> link(row, column)?.let { linkText(it, row, column) } },
@@ -82,16 +76,12 @@ class TableView(
         add(filterRow, BorderLayout.SOUTH)
     }
 
-    // Paging and sorting of the table. Sorting happens in SQL, so it covers all rows, not just the page.
-    private var offset = 0
-    private var totalRows = 0L
-
     /** What the user typed per column, in column order; empty until the first page is shown. */
     private var filters: List<String> = emptyList()
 
     /** Waits for a pause in typing before asking the app for the filtered rows. */
     private val filterTimer = Timer(FILTER_DELAY_MS) {
-        offset = 0
+        pager.offset = 0
         loadPage()
     }.apply { isRepeats = false }
 
@@ -108,30 +98,15 @@ class TableView(
     private var pendingFilter: Pair<String, Any>? = null
 
     init {
-        val bottom = JPanel(BorderLayout()).apply {
-            add(status, BorderLayout.CENTER)
-            add(
-                JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
-                    add(addButton)
-                    add(deleteButton)
-                    add(refreshButton)
-                    add(prevButton)
-                    add(pageLabel)
-                    add(nextButton)
-                },
-                BorderLayout.EAST,
-            )
-        }
-        status.border = JBUI.Borders.empty(2, 6)
+        val edits = listOf(
+            action("Refresh", AllIcons.Actions.Refresh, perform = ::loadPage),
+            action("Add Row", AllIcons.General.Add, { model.data.editable }, ::addRow),
+            action("Delete Rows", AllIcons.General.Remove, { model.keyColumn != null && table.selectedRowCount > 0 }, ::deleteSelectedRows),
+        )
+        add(tabBar(toolbar(this, edits), status, toolbar(this, pager.actions)), BorderLayout.NORTH)
+        add(ScrollPaneFactory.createScrollPane(table, true), BorderLayout.CENTER)
 
-        add(JBScrollPane(table), BorderLayout.CENTER)
-        add(bottom, BorderLayout.SOUTH)
-
-        refreshButton.addActionListener { loadPage() }
-        addButton.addActionListener { addRow() }
-        deleteButton.addActionListener { deleteSelectedRows() }
         model.onEdit = ::saveCell
-        table.selectionModel.addListSelectionListener { updateEditButtons() }
         val deleteRows = object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent) = deleteSelectedRows()
         }
@@ -161,21 +136,12 @@ class TableView(
                 table.cursor = if (onLink) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) else null
             }
         })
-        prevButton.addActionListener {
-            offset = maxOf(0, offset - PAGE_SIZE)
-            loadPage()
-        }
-        nextButton.addActionListener {
-            offset += PAGE_SIZE
-            loadPage()
-        }
         table.tableHeader.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 val column = table.columnAtPoint(e.point)
                 if (column >= 0) sortBy(table.convertColumnIndexToModel(column))
             }
         })
-        updatePager()
         loadPage()
     }
 
@@ -186,13 +152,13 @@ class TableView(
 
     private fun sortBy(column: Int) {
         model.toggleSort(column)
-        offset = 0
+        pager.offset = 0
         loadPage()
     }
 
     private fun loadPage() {
         val client = client
-        val offset = offset
+        val offset = pager.offset
         val sortColumn = model.sortColumn
         val descending = model.sortDescending
         val filters = filters
@@ -218,18 +184,18 @@ class TableView(
                 val data = if (filtered) page.copy(columns = model.data.columns, editable = model.data.editable) else page
                 if (key != null) primaryKey = key
                 if (foreignKeys != null) this.foreignKeys = foreignKeys
-                totalRows = count
                 model.keyColumn = keyColumn(data)
                 showKeepingWidths(table, data)
                 if (this.filters.size != data.columns.size) this.filters = List(data.columns.size) { "" }
                 filterRow.show(this.filters)
-                updatePager()
-                status.text = if (filtered) "$count matching rows" else "$count rows"
-                when {
-                    !data.editable -> status.text += " (read-only)"
-                    model.keyColumn == null -> status.text += " (no single-column primary key, so rows can only be added)"
+                pager.total = count
+                pager.shown = model.rowCount
+                pager.update()
+                status.text = when {
+                    !data.editable -> "Read-only"
+                    model.keyColumn == null -> "No single-column primary key, so rows can only be added"
+                    else -> ""
                 }
-                updateEditButtons()
                 pendingFilter?.let { (column, value) -> filterBy(column, value) }
             }
         }
@@ -259,7 +225,7 @@ class TableView(
         }
         filters = List(model.data.columns.size) { if (it == index) "=$value" else "" }
         filterRow.show(filters)
-        offset = 0
+        pager.offset = 0
         loadPage()
     }
 
@@ -287,11 +253,6 @@ class TableView(
         if (!data.editable) return null
         val name = primaryKey?.singleOrNull() ?: return null
         return data.columns.indexOfFirst { it.name == name }.takeIf { it >= 0 }
-    }
-
-    private fun updateEditButtons() {
-        addButton.isEnabled = model.data.editable
-        deleteButton.isEnabled = model.keyColumn != null && table.selectedRowCount > 0
     }
 
     private fun keyValue(row: Int): RowValue {
@@ -371,16 +332,13 @@ class TableView(
         }.show(table, e.x, e.y)
     }
 
-    private fun updatePager() {
-        val shown = model.rowCount
-        pageLabel.text = if (shown == 0) "" else "${offset + 1}–${offset + shown} of $totalRows"
-        prevButton.isEnabled = offset > 0
-        nextButton.isEnabled = offset + shown < totalRows
-    }
-
     override val title get() = tableName
 
     override val tooltip get() = "$database › $tableName"
+
+    override val icon: Icon get() = AllIcons.Nodes.DataTables
+
+    override val preferredFocus: JComponent get() = table
 
     override fun savedTab() = SavedSession.Tab(database, tableName)
 

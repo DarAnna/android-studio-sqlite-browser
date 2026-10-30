@@ -46,18 +46,20 @@ class TableDataModelTest {
     }
 
     @Test
-    fun `the key column is marked in its header`() {
-        assertEquals("article_id 🔑", model.getColumnName(0))
+    fun `headers are the bare column names`() {
+        model.toggleSort(0)
+
+        assertEquals("article_id", model.getColumnName(0))
         assertEquals("name", model.getColumnName(1))
     }
 
     @Test
     fun `sorting a column goes ascending, descending, then off`() {
         model.toggleSort(1)
-        assertEquals("name ▲", model.getColumnName(1))
+        assertEquals(1 to false, model.sortColumn to model.sortDescending)
 
         model.toggleSort(1)
-        assertEquals("name ▼", model.getColumnName(1))
+        assertEquals(1 to true, model.sortColumn to model.sortDescending)
 
         model.toggleSort(1)
         assertEquals(null, model.sortColumn)

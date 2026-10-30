@@ -1,7 +1,11 @@
 package io.github.daranna.sqlitebrowser.ui
 
 import com.intellij.ui.components.JBTextField
+import com.intellij.util.ui.JBUI
 import java.awt.Dimension
+import java.awt.Graphics
+import java.awt.event.FocusEvent
+import java.awt.event.FocusListener
 import javax.swing.JPanel
 import javax.swing.JTable
 import javax.swing.event.ChangeEvent
@@ -12,7 +16,8 @@ import javax.swing.event.TableColumnModelEvent
 import javax.swing.event.TableColumnModelListener
 
 /**
- * One text field under each column header, kept in line with the columns as they are resized or moved.
+ * One text field under each column header, kept in line with the columns as they are resized or moved. The fields
+ * have no frame of their own: they sit in the table's grid, and the one with focus is outlined.
  *
  * Meant for the scroll pane's column header view, so it scrolls sideways with the table.
  * [onChange] runs when the user edits a field, not when [show] sets the texts.
@@ -54,6 +59,17 @@ class ColumnFilterRow(private val table: JTable, private val onChange: () -> Uni
 
     private fun newField() = JBTextField().apply {
         emptyText.text = "Filter"
+        background = table.background
+        border = IDLE_BORDER
+        addFocusListener(object : FocusListener {
+            override fun focusGained(e: FocusEvent) {
+                border = FOCUSED_BORDER
+            }
+
+            override fun focusLost(e: FocusEvent) {
+                border = IDLE_BORDER
+            }
+        })
         document.addDocumentListener(object : DocumentListener {
             override fun insertUpdate(e: DocumentEvent) = edited()
             override fun removeUpdate(e: DocumentEvent) = edited()
@@ -66,16 +82,39 @@ class ColumnFilterRow(private val table: JTable, private val onChange: () -> Uni
     }
 
     override fun getPreferredSize(): Dimension {
-        val height = fields.firstOrNull()?.preferredSize?.height ?: 0
+        val height = fields.firstOrNull()?.let { maxOf(it.preferredSize.height, table.rowHeight) + LINE } ?: 0
         return Dimension(table.columnModel.totalColumnWidth, height)
     }
 
+    /** Leaves a line under the fields and between them, where [paintComponent] draws the table's grid. */
     override fun doLayout() {
         var x = 0
         for (view in 0 until table.columnModel.columnCount) {
             val width = table.columnModel.getColumn(view).width
-            fields.getOrNull(table.convertColumnIndexToModel(view))?.setBounds(x, 0, width, height)
+            fields.getOrNull(table.convertColumnIndexToModel(view))?.setBounds(x, 0, width - LINE, height - LINE)
             x += width
         }
+    }
+
+    override fun paintComponent(g: Graphics) {
+        super.paintComponent(g)
+        if (fields.isEmpty()) return
+        g.color = table.gridColor
+        val width = table.columnModel.totalColumnWidth
+        g.fillRect(0, height - LINE, width, LINE)
+        var x = 0
+        for (view in 0 until table.columnModel.columnCount) {
+            x += table.columnModel.getColumn(view).width
+            g.fillRect(x - LINE, 0, LINE, height)
+        }
+    }
+
+    private companion object {
+        const val LINE = 1
+        val IDLE_BORDER = JBUI.Borders.empty(0, 6)
+        val FOCUSED_BORDER = JBUI.Borders.compound(
+            JBUI.Borders.customLine(JBUI.CurrentTheme.Focus.focusColor(), 1),
+            JBUI.Borders.empty(0, 5),
+        )
     }
 }

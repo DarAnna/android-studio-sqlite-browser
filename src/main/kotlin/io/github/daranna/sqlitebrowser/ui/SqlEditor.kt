@@ -40,6 +40,11 @@ internal class SqlEditor(private val project: Project, sql: String) {
             editor.setVerticalScrollbarVisible(true)
             editor.setHorizontalScrollbarVisible(true)
             editor.settings.isCaretRowShown = true
+            // A gutter like the editor's, so the SQL doesn't touch the tab's edge.
+            editor.settings.isLineNumbersShown = true
+            editor.settings.isFoldingOutlineShown = false
+            editor.settings.additionalLinesCount = 0
+            editor.setBorder(null)
         }
     }
 
