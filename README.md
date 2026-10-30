@@ -74,7 +74,7 @@ debugImplementation("com.github.amitshekhariitbhu.Android-Debug-Database:debug-d
 
 ### 2. Install the plugin
 
-Needs Android Studio 2026.1 or newer.
+Needs Android Studio 2025.3 (Panda) or newer.
 
 There is no Marketplace release yet. Build the plugin from this repository:
 

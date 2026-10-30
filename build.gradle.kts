@@ -16,6 +16,8 @@ kotlin {
         // Call IntelliJ's interface default methods instead of copying them into our classes;
         // the copies show up as deprecated and experimental API use in verifyPlugin.
         jvmDefault.set(org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode.NO_COMPATIBILITY)
+        // The plugin runs on the Kotlin standard library bundled with the IDE, which is 2.2 in Android Studio 2025.3.
+        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_2)
     }
 }
 
@@ -46,7 +48,7 @@ intellijPlatform {
     }
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "261"
+            sinceBuild = "253"
         }
     }
     // Marketplace secrets never live in the repo. Locally: the key and certificate in ~/.config/jetbrains-marketplace,
@@ -72,7 +74,9 @@ intellijPlatform {
     }
     pluginVerification {
         ides {
+            // The oldest Studio we build against, and the newest.
             create(IntelliJPlatformType.AndroidStudio, providers.gradleProperty("androidStudioVersion").get())
+            create(IntelliJPlatformType.AndroidStudio, providers.gradleProperty("latestAndroidStudioVersion").get())
         }
     }
 }
