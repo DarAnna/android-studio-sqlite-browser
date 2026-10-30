@@ -76,13 +76,15 @@ debugImplementation("com.github.amitshekhariitbhu.Android-Debug-Database:debug-d
 
 Needs Android Studio 2025.3 (Panda) or newer.
 
-There is no Marketplace release yet. Build the plugin from this repository:
+In Android Studio: *Settings → Plugins → Marketplace*, search for **Live SQLite for Android** and press **Install**. Or install it from its [Marketplace page](https://plugins.jetbrains.com/plugin/35656-live-sqlite-for-android).
+
+To run the latest code instead, build the plugin from this repository:
 
 ```bash
 ./gradlew buildPlugin
 ```
 
-Then in Android Studio: *Settings → Plugins → ⚙ → Install Plugin from Disk*, and pick `build/distributions/sqlite-browser-0.1.0.zip`.
+Then *Settings → Plugins → ⚙ → Install Plugin from Disk*, and pick the zip in `build/distributions/`.
 
 ### 3. Connect
 
