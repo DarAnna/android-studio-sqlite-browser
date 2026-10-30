@@ -1,11 +1,25 @@
 <idea-plugin>
     <id>io.github.daranna.sqlitebrowser</id>
     <name>Live SQLite for Android</name>
-    <vendor url="https://github.com/DarAnna/android-studio-sqlite-browser">Anna Darii</vendor>
+    <vendor url="https://github.com/DarAnna/android-studio-sqlite-browser">DarAnna</vendor>
     <description><![CDATA[
-        <p>Browse and edit the SQLite databases of a running Android debug app, live.</p>
-        <p><b>Your app needs the <a href="https://github.com/amitshekhariitbhu/Android-Debug-Database">Android-Debug-Database</a>
-        (debug-db) library.</b> The plugin shows nothing without it. Add JitPack to <code>settings.gradle.kts</code>:</p>
+        <p>Browse and edit the SQLite databases of your Android debug app while it runs, in a tool window.</p>
+        <p>I built it to add what Android Studio's Database Inspector is missing, starting with a filter for every
+        column.</p>
+        <ul>
+            <li>Filter box under every column: plain text, or a comparison like <code>&gt;100</code> or <code>!=draft</code>.</li>
+            <li>Sort by any column. Filters and sorting apply to the whole table, not only the loaded rows.</li>
+            <li>Rows load 500 at a time, so large tables open fast.</li>
+            <li>Click a foreign key to open the rows it references.</li>
+            <li>Edit cells, set them to NULL, add and delete rows.</li>
+            <li>Run your own SQL, with completion of table and column names, recent queries and favorites per database.</li>
+            <li>Tables from several databases open side by side in tabs, and the plugin reconnects to the same app next time.</li>
+        </ul>
+
+        <h3>Setup</h3>
+        <p>Your app needs the <a href="https://github.com/amitshekhariitbhu/Android-Debug-Database">Android-Debug-Database</a>
+        (debug-db) library; the plugin talks to its server inside the app through <code>adb forward</code>.
+        Add JitPack to <code>settings.gradle.kts</code>:</p>
         <pre>dependencyResolutionManagement {
     repositories {
         maven { setUrl("https://jitpack.io") }
@@ -13,9 +27,12 @@
 }</pre>
         <p>and debug-db to the app module's <code>build.gradle.kts</code>:</p>
         <pre>debugImplementation("com.github.amitshekhariitbhu.Android-Debug-Database:debug-db:1.0.7")</pre>
-        <p><code>debugImplementation</code> keeps it out of your release build.
-        Full guide: <a href="https://github.com/DarAnna/android-studio-sqlite-browser#usage">README</a>.</p>
-        <p>The plugin talks to the debug-db server inside the app through <code>adb forward</code>.</p>
+        <p><code>debugImplementation</code> keeps it out of your release build. Then run the app, open the
+        <b>SQLite Browser</b> tool window and press <b>Connect</b>.
+        More in the <a href="https://github.com/DarAnna/android-studio-sqlite-browser#usage">README</a>.</p>
+
+        <p>Screens that read through Room (<code>Flow</code>, <code>LiveData</code>) don't see your edits until they
+        query the database again.</p>
     ]]></description>
 
     <change-notes><![CDATA[
