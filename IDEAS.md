@@ -68,3 +68,12 @@ Things to settle:
 - Tables: a database whose tables haven't been listed yet. Listing them means `tables(db)`, which switches the server's open database (other tabs reopen theirs through `withDatabase`).
 - Columns: the column names come from the loaded page's header, so search works the same in table and query tabs and sends nothing to the app.
 - Columns: maybe also search across tables ("which table has `article_id`?") with each table's `PRAGMA table_info`, like the reverse foreign key idea above.
+
+## 5. Copy any cell's value
+
+Copy a cell's value from any cell, not just by opening its editor and selecting the text. Today that is the only way, so it fails wherever a cell isn't editable: primary key columns, tables without a single-column primary key, and query results.
+
+Things to settle:
+- How: Ctrl+C on the selected cells and a **Copy** item in the cell's right-click menu, through `CopyPasteManager` like the panel's "Copy Gradle line".
+- Several cells: tab-separated columns and one line per row, so it pastes into a spreadsheet. Maybe also **Copy Row** with the column names.
+- NULL: copy an empty string, not the `NULL` the table shows. Long text and blobs: copy the full value, not what the cell shows.
