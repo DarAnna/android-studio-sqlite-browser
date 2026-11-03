@@ -24,7 +24,6 @@ import com.intellij.ui.EditorNotificationPanel
 import com.intellij.ui.InlineBanner
 import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
-import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanelWithEmptyText
@@ -130,7 +129,9 @@ class SqliteBrowserPanel(private val project: Project, parent: Disposable, priva
         content.add(emptyTabs, EMPTY)
         content.add(tabs.component, TABS)
         val splitter = OnePixelSplitter(false, 0.2f).apply {
-            firstComponent = ScrollPaneFactory.createScrollPane(tree.component, true)
+            // Otherwise a tab wider than the window squeezes the tree to a sliver that can't be dragged back out.
+            setHonorComponentsMinimumSize(false)
+            firstComponent = tree.view
             secondComponent = content
         }
 

@@ -63,3 +63,23 @@ class DatabaseTreeTest {
         assertNull(tree.queryTarget())
     }
 }
+
+class ColumnDetailsTest {
+    @Test
+    fun `a column without a declared type or constraints has no description`() {
+        assertEquals(
+            listOf(ColumnDetails("note", false, "")),
+            columnDetails(listOf(DebugDbClient.ColumnInfo("note", "", false, 0)), emptyList()),
+        )
+    }
+
+    @Test
+    fun `every column of a composite key is in the primary key`() {
+        val details = columnDetails(
+            listOf(DebugDbClient.ColumnInfo("a", "TEXT", true, 2), DebugDbClient.ColumnInfo("b", "TEXT", true, 1)),
+            emptyList(),
+        )
+
+        assertEquals(listOf(true, true), details.map { it.inPrimaryKey })
+    }
+}

@@ -169,11 +169,15 @@ class DebugDbClient(private val port: Int) {
             type = it[2].value as? String ?: "",
             notNull = (it[3].value as Number).toInt() != 0,
             keyPosition = (it[5].value as Number).toInt(),
+            defaultValue = it[4].value?.toString(),
         )
     }
 
-    /** A column as declared; [keyPosition] is its 1-based place in the primary key, or 0 when it is not in it. */
-    data class ColumnInfo(val name: String, val type: String, val notNull: Boolean, val keyPosition: Int)
+    /**
+     * A column as declared; [keyPosition] is its 1-based place in the primary key, or 0 when it is not in it.
+     * [defaultValue] is the SQL text of its DEFAULT, such as `'none'` or `CURRENT_TIMESTAMP`, or null without one.
+     */
+    data class ColumnInfo(val name: String, val type: String, val notNull: Boolean, val keyPosition: Int, val defaultValue: String? = null)
 
     /**
      * [table]'s single-column foreign keys, from `PRAGMA foreign_key_list`. Composite ones are left out: one cell's

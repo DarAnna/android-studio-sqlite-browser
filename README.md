@@ -15,14 +15,17 @@ This plugin does the same job as the App Inspection's Database Inspector plus mo
   - Start with an operator to compare instead: `=3`, `!=draft`, `>100`, `<=2026-01-01`. Numbers are compared as numbers.
   - Filters in several columns combine: a row must match all of them.
 - **Sort by any column.** Click a header to sort the whole table by it: once ascending, twice descending, a third time back to table order.
-- **Big tables are fine.** Rows load 500 at a time, so a table with hundreds of thousands of rows opens fast and doesn't run your app out of memory.
+- **Big tables are fine.** Rows load 50 at a time, so a table with hundreds of thousands of rows opens fast and doesn't run your app out of memory.
 - **Follow foreign keys.** A cell of a foreign key column has an arrow: click it (or right-click the cell) to open the table it refers to in a new tab, filtered to the rows with that value, e.g. the article a purchase names. Its filter box holds `=value`; clear it to see the whole table. Close the tab to go back to where you came from. Keys over several columns aren't followed.
 
   ![The purchase table, with an arrow in each article_id cell and the tooltip "Open article where article_id = 8"](docs/screenshots/foreign-key.png)
 
 - **Tabs.** All databases and their tables sit in a tree; double-click a table to open it in its own tab. Keep several tables from several databases open side by side.
+- **Search tables.** Type in the field above the tree to show only the tables whose name holds that text, in every database. Enter opens the first one, ↓ moves into the tree.
+- **Find a column.** In a wide table or query result, type part of a column name in **Find column** at the top of the tab: the first match scrolls into view and gets selected, and matching headers show the match in bold. Enter or ↓ goes to the next match, Shift+Enter or ↑ back.
+- **Copy.** Click a cell, or drag or Shift-click across several, and press ⌘C or Ctrl+C. One cell copies its whole value; several copy as tab-separated lines, which paste into a spreadsheet. NULL copies as empty. Right-click for **Copy Row**, which copies whole rows with the column names. Works in every table and in query results, editable or not.
 - **Picks up where you left off.** The plugin remembers the device, port and open tabs. Next time, it reconnects by itself if the same app is running.
-- **Edit the data.** Double-click a cell to change it, right-click it to set it to NULL. **Add Row** inserts a row; columns you leave empty get their default. Select rows and press Delete (or **Delete Rows** in the tab's toolbar) to remove them. Changes go straight into the app's database.
+- **Edit the data.** Double-click a cell to change it, right-click it to set it to NULL. **Add Row** inserts a row; columns you leave empty get their default. Select cells and press Delete (or **Delete Rows** in the tab's toolbar) to remove their rows. Changes go straight into the app's database.
   - Editing and deleting rows need a table with a single-column primary key, which picks the row. Other tables can only get new rows.
   - The key itself can't be changed.
   - Typing the text `null` stores NULL: debug-db can't tell them apart.
@@ -33,7 +36,7 @@ This plugin does the same job as the App Inspection's Database Inspector plus mo
 
   ![A query tab: favorites and recent queries on the left, the SQL and its result on the right](docs/screenshots/query.png)
 
-  - A `SELECT` (or `WITH … SELECT`) loads 500 rows at a time, and you can sort it by clicking a header, like a table.
+  - A `SELECT` (or `WITH … SELECT`) loads 50 rows at a time, and you can sort it by clicking a header, like a table.
   - Several statements separated by `;` run in order, and you see the result of the last one. Paging and sorting run only that last `SELECT` again, never the statements before it.
   - Writes (`UPDATE`, `INSERT`, `DELETE`, …) go straight into the app's database, but Room doesn't notice them: see [Limitations](#limitations). Query results can't be edited in the grid.
   - The SQL is kept when you restart Android Studio, but it doesn't run until you press **Run**.

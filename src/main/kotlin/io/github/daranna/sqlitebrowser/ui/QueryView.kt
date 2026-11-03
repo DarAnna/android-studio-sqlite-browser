@@ -12,9 +12,9 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.JBPopupMenu
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.ScrollPaneFactory
-import com.intellij.ui.table.JBTable
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbException
 import io.github.daranna.sqlitebrowser.debugdb.UserSql
@@ -69,8 +69,7 @@ class QueryView(
     private val status = StatusLabel()
 
     private val model = TableDataModel()
-    private val table = JBTable(model).apply {
-        autoResizeMode = JBTable.AUTO_RESIZE_OFF
+    private val table = RowsTable(model).apply {
         setDefaultRenderer(Any::class.java, NullAwareRenderer())
         tableHeader.defaultRenderer = HeaderRenderer(tableHeader.defaultRenderer)
     }
@@ -78,6 +77,7 @@ class QueryView(
     /** The SELECT whose rows are shown, from the last run; null when that run ended in something else. */
     private var select: String? = null
     private val pager = Pager({ select != null }, ::loadPage)
+    private val columnSearch = ColumnSearch(table)
 
     /** Counts runs and page loads, so a slow answer doesn't replace a newer one. */
     private var loadSeq = 0
@@ -91,7 +91,11 @@ class QueryView(
             add(editor.component, BorderLayout.CENTER)
         }
         val results = JPanel(BorderLayout()).apply {
-            add(tabBar(null, status, toolbar(this@QueryView, pager.actions)), BorderLayout.NORTH)
+            val end = JPanel(BorderLayout()).apply {
+                add(columnSearch.component, BorderLayout.WEST)
+                add(toolbar(this@QueryView, pager.actions), BorderLayout.CENTER)
+            }
+            add(tabBar(null, status, end), BorderLayout.NORTH)
             add(ScrollPaneFactory.createScrollPane(table, true), BorderLayout.CENTER)
         }
         sides.firstComponent = savedList.component
@@ -130,9 +134,24 @@ class QueryView(
                 loadPage()
             }
         })
+        table.addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) = maybeShowPopup(e)
+
+            override fun mouseReleased(e: MouseEvent) = maybeShowPopup(e)
+        })
         showSaved()
         status.text = "SQL on $database. Press Run."
         loadSchema()
+    }
+
+    /** Right-click on a cell: select it, then offer to copy. */
+    private fun maybeShowPopup(e: MouseEvent) {
+        if (!e.isPopupTrigger) return
+        val row = table.rowAtPoint(e.point)
+        val column = table.columnAtPoint(e.point)
+        if (row < 0 || column < 0) return
+        if (!table.isCellSelected(row, column)) table.changeSelection(row, column, false, false)
+        JBPopupMenu().apply { table.addCopyItems(this) }.show(table, e.x, e.y)
     }
 
     /** Leaves the old names when it fails: completion without them is still an editor, and Run reports the error. */

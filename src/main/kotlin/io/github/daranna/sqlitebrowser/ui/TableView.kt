@@ -5,7 +5,6 @@ import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.ScrollPaneFactory
-import com.intellij.ui.table.JBTable
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient.ForeignKey
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient.RowValue
@@ -51,7 +50,7 @@ class TableView(
     private val pager = Pager(load = ::loadPage)
 
     private val model = TableDataModel()
-    private val table: JBTable = object : JBTable(model) {
+    private val table: RowsTable = object : RowsTable(model) {
         // The table moves its header into the scroll pane every time it is added to one, which takes it out of
         // columnHeader. Put it back, then put columnHeader in its place.
         override fun configureEnclosingScrollPane() {
@@ -61,7 +60,6 @@ class TableView(
             scrollPane.setColumnHeaderView(columnHeader)
         }
     }.apply {
-        autoResizeMode = JBTable.AUTO_RESIZE_OFF
         // Stops editing when the user clicks elsewhere, e.g. on Refresh, instead of keeping the editor open.
         putClientProperty("terminateEditOnFocusLost", true)
         tableHeader.defaultRenderer = HeaderRenderer(tableHeader.defaultRenderer)
@@ -70,6 +68,7 @@ class TableView(
             NullAwareRenderer { row, column -> link(row, column)?.let { linkText(it, row, column) } },
         )
     }
+    private val columnSearch = ColumnSearch(table)
     private val filterRow = ColumnFilterRow(table, ::filtersEdited)
     private val columnHeader: JPanel = JPanel(BorderLayout()).apply {
         add(table.tableHeader, BorderLayout.NORTH)
@@ -103,7 +102,11 @@ class TableView(
             action("Add Row", AllIcons.General.Add, { model.data.editable }, ::addRow),
             action("Delete Rows", AllIcons.General.Remove, { model.keyColumn != null && table.selectedRowCount > 0 }, ::deleteSelectedRows),
         )
-        add(tabBar(toolbar(this, edits), status, toolbar(this, pager.actions)), BorderLayout.NORTH)
+        val end = JPanel(BorderLayout()).apply {
+            add(columnSearch.component, BorderLayout.WEST)
+            add(toolbar(this@TableView, pager.actions), BorderLayout.CENTER)
+        }
+        add(tabBar(toolbar(this, edits), status, end), BorderLayout.NORTH)
         add(ScrollPaneFactory.createScrollPane(table, true), BorderLayout.CENTER)
 
         model.onEdit = ::saveCell
@@ -303,7 +306,7 @@ class TableView(
         val row = table.rowAtPoint(e.point)
         val column = table.columnAtPoint(e.point)
         if (row < 0 || column < 0) return
-        if (!table.isRowSelected(row)) table.changeSelection(row, column, false, false)
+        if (!table.isCellSelected(row, column)) table.changeSelection(row, column, false, false)
         val modelRow = table.convertRowIndexToModel(row)
         val modelColumn = table.convertColumnIndexToModel(column)
         JBPopupMenu().apply {
@@ -315,6 +318,8 @@ class TableView(
                 )
                 addSeparator()
             }
+            table.addCopyItems(this)
+            addSeparator()
             add(
                 JBMenuItem("Set to NULL").apply {
                     isEnabled =
@@ -348,7 +353,7 @@ class TableView(
 
     companion object {
         /** Rows per request. Small enough that debug-db's in-memory JSON stays well under the app's heap. */
-        const val PAGE_SIZE = 500
+        const val PAGE_SIZE = 50
 
         private const val FILTER_DELAY_MS = 400
     }

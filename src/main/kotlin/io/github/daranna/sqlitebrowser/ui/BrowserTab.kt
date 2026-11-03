@@ -21,6 +21,7 @@ import icons.StudioIcons
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
 import java.awt.BorderLayout
 import java.awt.Component
+import java.awt.Dimension
 import java.awt.Point
 import javax.swing.Icon
 import javax.swing.JComponent
@@ -95,7 +96,10 @@ private const val SORT_ICON_ROOM = 20
 private const val MIN_COLUMN_WIDTH = 64
 private const val MAX_COLUMN_WIDTH = 320
 
-/** Marks the primary key and the sorted column of a [TableDataModel] with icons after the column's name. */
+/**
+ * Marks the primary key and the sorted column of a [TableDataModel] with icons after the column's name, and shows the
+ * part of the name that matches [TableDataModel.columnSearch] in bold.
+ */
 internal class HeaderRenderer(private val base: TableCellRenderer) : TableCellRenderer {
     override fun getTableCellRendererComponent(
         table: JTable,
@@ -113,6 +117,7 @@ internal class HeaderRenderer(private val base: TableCellRenderer) : TableCellRe
             StudioIcons.DatabaseInspector.PRIMARY_KEY.takeIf { index == model.keyColumn },
             (if (model.sortDescending) AllIcons.General.ArrowDown else AllIcons.General.ArrowUp).takeIf { index == model.sortColumn },
         )
+        highlightedHtml(model.getColumnName(index), model.columnSearch)?.let { label.text = it }
         label.icon = if (icons.size > 1) RowIcon(*icons.toTypedArray()) else icons.firstOrNull()
         label.horizontalTextPosition = SwingConstants.LEADING
         return label
@@ -182,6 +187,9 @@ internal class StatusLabel : JBLabel() {
         super.setText(text)
         toolTipText = text?.takeIf { it.isNotEmpty() }
     }
+
+    // A label's minimum width is its whole text, which would make a long status widen the tab past the window.
+    override fun getMinimumSize(): Dimension = Dimension(0, super.getMinimumSize().height)
 }
 
 /**
