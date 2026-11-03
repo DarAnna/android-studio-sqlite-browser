@@ -1,5 +1,6 @@
 package io.github.daranna.sqlitebrowser.ui
 
+import com.intellij.testFramework.runInEdtAndWait
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.components.JBLabel
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
@@ -36,8 +37,10 @@ class DatabaseTreeTest {
         assertEquals("shop.db", (rendered as SimpleColoredComponent).getCharSequence(false).toString())
     }
 
+    // On the EDT: once a platform test in the same JVM has installed the IDE's tree UI, selecting repaints through
+    // TreeUtil, which asserts it.
     @Test
-    fun `a new query goes to the selected database, else the first one that is not the preferences`() {
+    fun `a new query goes to the selected database, else the first one that is not the preferences`() = runInEdtAndWait {
         tree.show(
             null,
             listOf(
