@@ -2,11 +2,11 @@
 
 Browse and edit your debug app's SQLite databases, live, in a tool window in Android Studio.
 
-![The article table filtered to prices over 50 and sorted by price, next to the tree of databases and tables](docs/screenshots/filter-and-sort.png)
+![The article table filtered to prices over 100 and sorted by price, next to the tree of databases, tables and columns](docs/screenshots/filter-and-sort.png)
 
 ## Why
 
-This plugin does the same job as the App Inspection's Database Inspector plus more features (a filter box under every column, foreign keys you can follow to the rows they reference and favorite queries per database)
+This plugin does the same job as the App Inspection's Database Inspector plus more features: a filter box under every column, foreign keys you can follow to the rows they reference, search across tables and columns, and favorite queries per database.
 
 ## Features
 
@@ -21,8 +21,12 @@ This plugin does the same job as the App Inspection's Database Inspector plus mo
   ![The purchase table, with an arrow in each article_id cell and the tooltip "Open article where article_id = 8"](docs/screenshots/foreign-key.png)
 
 - **Tabs.** All databases and their tables sit in a tree; double-click a table to open it in its own tab. Keep several tables from several databases open side by side.
+- **See a table's columns.** Expand a table in the tree to list its columns with their type, `NOT NULL`, default and the foreign key they point to. Primary key columns have a key icon.
 - **Search tables.** Type in the field above the tree to show only the tables whose name holds that text, in every database. Enter opens the first one, ↓ moves into the tree.
 - **Find a column.** In a wide table or query result, type part of a column name in **Find column** at the top of the tab: the first match scrolls into view and gets selected, and matching headers show the match in bold. Enter or ↓ goes to the next match, Shift+Enter or ↑ back.
+
+  ![Find column with "city" typed in it: the shipping_city header shows the match in bold, in a table of 21 columns](docs/screenshots/find-column.png)
+
 - **Copy.** Click a cell, or drag or Shift-click across several, and press ⌘C or Ctrl+C. One cell copies its whole value; several copy as tab-separated lines, which paste into a spreadsheet. NULL copies as empty. Right-click for **Copy Row**, which copies whole rows with the column names. Works in every table and in query results, editable or not.
 - **Picks up where you left off.** The plugin remembers the device, port and open tabs. Next time, it reconnects by itself if the same app is running.
 - **Edit the data.** Double-click a cell to change it, right-click it to set it to NULL. **Add Row** inserts a row; columns you leave empty get their default. Select cells and press Delete (or **Delete Rows** in the tab's toolbar) to remove their rows. Changes go straight into the app's database.
