@@ -11,7 +11,8 @@ long that took:
   - `article`: 50 rows. Its column `article_id` contains the table name, which trips debug-db's
     table-name rewrite in `query` (`ORDER BY article_id` becomes `ORDER BY [article]_id`).
   - `big_table`: 150,000 rows of about 1,000 characters each. `getAllDataFromTheTable` on it runs
-    the app out of memory, so the plugin must page through `query` instead.
+    the app out of memory, so the plugin must page through `query` instead. It has 21 columns, in
+    groups that share a word (`shipping_city`, `billing_city`), to try **Find column** on.
   - `purchase`: 30 rows. `article_id` is a foreign key to `article` (every tenth is NULL), to
     follow from a cell to the article it names.
 - `settings.db`
