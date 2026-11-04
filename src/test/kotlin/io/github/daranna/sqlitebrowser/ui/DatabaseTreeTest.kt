@@ -1,5 +1,6 @@
 package io.github.daranna.sqlitebrowser.ui
 
+import com.intellij.testFramework.runInEdtAndWait
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.components.JBLabel
 import io.github.daranna.sqlitebrowser.debugdb.DebugDbClient
@@ -36,8 +37,10 @@ class DatabaseTreeTest {
         assertEquals("shop.db", (rendered as SimpleColoredComponent).getCharSequence(false).toString())
     }
 
+    // On the EDT: once a platform test in the same JVM has installed the IDE's tree UI, selecting repaints through
+    // TreeUtil, which asserts it.
     @Test
-    fun `a new query goes to the selected database, else the first one that is not the preferences`() {
+    fun `a new query goes to the selected database, else the first one that is not the preferences`() = runInEdtAndWait {
         tree.show(
             null,
             listOf(
@@ -61,5 +64,25 @@ class DatabaseTreeTest {
         tree.show(null, listOf(DebugDbClient.Database("APP_SHARED_PREFERENCES", false)))
 
         assertNull(tree.queryTarget())
+    }
+}
+
+class ColumnDetailsTest {
+    @Test
+    fun `a column without a declared type or constraints has no description`() {
+        assertEquals(
+            listOf(ColumnDetails("note", false, "")),
+            columnDetails(listOf(DebugDbClient.ColumnInfo("note", "", false, 0)), emptyList()),
+        )
+    }
+
+    @Test
+    fun `every column of a composite key is in the primary key`() {
+        val details = columnDetails(
+            listOf(DebugDbClient.ColumnInfo("a", "TEXT", true, 2), DebugDbClient.ColumnInfo("b", "TEXT", true, 1)),
+            emptyList(),
+        )
+
+        assertEquals(listOf(true, true), details.map { it.inPrimaryKey })
     }
 }

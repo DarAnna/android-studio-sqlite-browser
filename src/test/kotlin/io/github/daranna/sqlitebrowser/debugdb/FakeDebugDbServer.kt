@@ -15,7 +15,10 @@ class FakeDebugDbServer : AutoCloseable {
     /** Raw path and query of each request, e.g. `query?query=SELECT%20...`, as debug-db sees them. */
     val requests = mutableListOf<String>()
 
-    /** Endpoint name (`getDbList`, `query`, ...) to the JSON body it returns. */
+    /**
+     * Endpoint name (`getDbList`, `query`, ...) to the JSON body it returns. A key with the query too, such as
+     * `getTableList?database=shop.db`, wins over the bare endpoint.
+     */
     val responses = mutableMapOf<String, String>()
 
     /** SQL of a `query` request to the JSON body it returns, ahead of [responses], for calls that send several queries. */
@@ -28,7 +31,7 @@ class FakeDebugDbServer : AutoCloseable {
             synchronized(requests) { requests += route }
             val endpoint = uri.rawPath.removePrefix("/")
             val sql = if (endpoint == "query") URLDecoder.decode(uri.rawQuery.substringAfter("="), Charsets.UTF_8) else null
-            val body = queries[sql] ?: responses[endpoint]
+            val body = queries[sql] ?: responses[route] ?: responses[endpoint]
             if (body == null) {
                 exchange.sendResponseHeaders(500, -1)
             } else {

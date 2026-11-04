@@ -366,6 +366,17 @@ class DebugDbClientTest {
     }
 
     @Test
+    fun `columns reads DEFAULT as its SQL text`() {
+        server.responses["query"] =
+            """{"isSuccessful":true,"isEditable":false,"tableInfos":[],"rows":[
+               |[{"dataType":"integer","value":0},{"dataType":"text","value":"title"},{"dataType":"text","value":"TEXT"},
+               |{"dataType":"integer","value":0},{"dataType":"text","value":"'untitled'"},{"dataType":"integer","value":0}]]}
+            """.trimMargin()
+
+        assertEquals("'untitled'", client.columns("article").single().defaultValue)
+    }
+
+    @Test
     fun `foreignKeys reads single-column keys from PRAGMA foreign_key_list`() {
         // Rows: id, seq, table, from, to, on_update, on_delete, match. Key 1 spans two columns, so it's left out.
         server.queries["PRAGMA foreign_key_list(purchase)"] =

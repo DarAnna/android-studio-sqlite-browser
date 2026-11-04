@@ -84,3 +84,10 @@ intellijPlatform {
 ktlint {
     version = "1.8.0"
 }
+
+// CI has no test report to open, so its log needs the whole stack trace of a failing test.
+tasks.test {
+    testLogging {
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}

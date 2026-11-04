@@ -25,6 +25,9 @@ class TableDataModel : AbstractTableModel() {
     var sortColumn: Int? = null
     var sortDescending = false
 
+    /** What the tab's [ColumnSearch] holds; [HeaderRenderer] shows the names that hold it in bold. */
+    var columnSearch = ""
+
     /** Sorts by [column]: the first time ascending, the second descending, the third back to the rows' own order. */
     fun toggleSort(column: Int) {
         when {

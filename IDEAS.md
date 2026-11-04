@@ -10,7 +10,11 @@ Later: the other way along a foreign key, from a row to the rows that refer to i
 
 Later: editing in query results. A free-form result has no single table or primary keys, so this probably only works for a plain `SELECT * FROM t …`.
 
+Later: search for a column across tables ("which table has `article_id`?") with each table's `PRAGMA table_info`, like the reverse foreign key above. And maybe hide the columns that don't match **Find column**.
+
 Done:
+- Copying any cell's value (`RowsTable`, shared by table and query tabs). Cells are selected one at a time or in blocks; the IDE's Copy goes through a `CopyProvider`, so it follows the keymap. One cell copies its model value as is (NULL as empty), several copy as tab-separated lines, quoted where a value holds a tab, newline or quote. **Copy Row** in the right-click menu adds a line of column names. Delete Rows acts on the rows of the selected cells.
+- Searching tables and columns. A search field above the database tree keeps the tables whose name holds the text, in every database; databases not expanded yet get listed then with `tables(db)`, and tabs reopen theirs through `withDatabase`. **Find column** in a table or query tab (`ColumnSearch`) selects the next column whose name holds the text, from the page's header, and `HeaderRenderer` shows the match in bold.
 - Following a foreign key from the table view. `DebugDbClient.foreignKeys` reads `PRAGMA foreign_key_list` (it passes through `query`) once per table, single-column keys only; a key without a column (`REFERENCES article`) means the target's primary key. A cell gets an arrow icon; a click opens the target table in a new tab, even when it is open already so that tab's filters stay, and `TableView.filterBy` sets `=value` in the target column's filter, which already keeps to the table name rule. That shows every matching row, which for a key into a primary key is the one row. Closing that tab selects the one it was followed from. The sample app's `purchase` table refers to `article`.
 - Tabs, a database tree and a compact connection bar ([#2](https://github.com/DarAnna/android-studio-sqlite-browser/pull/2)). Tabs load through `DebugDbClient.withDatabase`, which reopens their database when another tab switched it.
 - Device, port and open tabs kept across IDE restarts (`SavedSession`, in the workspace file). On start the panel reconnects only if the same app answers on the saved port, and reopens only tabs whose database and table the app still has.
@@ -56,15 +60,3 @@ Things to settle:
 - Which database: the entity is listed in a `@Database(entities = […])` class, but the file name only appears in `Room.databaseBuilder(…, "name.db")`, which may be built at runtime. Simpler: ask the connected app which of its databases has that table, and offer a choice when several do. Remember that `databases()` comes before `tables()`, and only names it returned may be passed.
 - Not connected: open the panel and connect first, or show a hint instead of the icon doing nothing.
 - Maybe also: a `@Query` in a `@Dao` opens in a query tab with its SQL, with `:param` placeholders left for the user to fill in.
-
-## 4. Search tables and columns
-
-Two searches for big schemas:
-- **Tables:** a search field above the database tree that narrows it to tables whose name matches, across every database. The names are already loaded for the tree, so this needs no request to debug-db.
-- **Columns in a wide table:** in a table or query tab, type part of a column name to jump to that column: scroll it into view and select it. Maybe also hide the columns that don't match.
-
-Things to settle:
-- Tables: a tree speed search (IntelliJ's `TreeSpeedSearch`, type while the tree has focus) may be enough, instead of a separate field.
-- Tables: a database whose tables haven't been listed yet. Listing them means `tables(db)`, which switches the server's open database (other tabs reopen theirs through `withDatabase`).
-- Columns: the column names come from the loaded page's header, so search works the same in table and query tabs and sends nothing to the app.
-- Columns: maybe also search across tables ("which table has `article_id`?") with each table's `PRAGMA table_info`, like the reverse foreign key idea above.
