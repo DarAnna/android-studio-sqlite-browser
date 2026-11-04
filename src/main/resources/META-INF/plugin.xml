@@ -9,8 +9,11 @@
         <ul>
             <li>Filter box under every column: plain text, or a comparison like <code>&gt;100</code> or <code>!=draft</code>.</li>
             <li>Sort by any column. Filters and sorting apply to the whole table, not only the loaded rows.</li>
-            <li>Rows load 500 at a time, so large tables open fast.</li>
+            <li>Rows load 50 at a time, so large tables open fast.</li>
             <li>Click a foreign key to open the rows it references.</li>
+            <li>Search tables across every database, and jump to a column in a wide table.</li>
+            <li>Expand a table in the tree to see its columns, with their types, constraints and foreign keys.</li>
+            <li>Copy any cell or block of cells, or whole rows with their column names.</li>
             <li>Edit cells, set them to NULL, add and delete rows.</li>
             <li>Run your own SQL, with completion of table and column names, recent queries and favorites per database.</li>
             <li>Tables from several databases open side by side in tabs, and the plugin reconnects to the same app next time.</li>
@@ -36,6 +39,9 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <p>0.3.0: search tables across every database, find a column in a wide table, see a table's columns in the
+        tree, and copy any cell, block of cells or row. Pages now hold 50 rows instead of 500. Fixes the database tree
+        getting squeezed by a crowded tab, with no way to drag it back out.</p>
         <p>0.2.0: a tidier tool window. Tables and query results get a toolbar with a pager, tabs are editor tabs
         with a close button, filter fields line up with their columns, and the primary key and sort show as header
         icons. The SQL editor has line numbers, and saved queries fold like a tree.</p>
